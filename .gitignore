@@ -22,23 +22,37 @@ env/
 .DS_Store
 Thumbs.db
 desktop.ini
+*.lnk
 
 # ---- IDE ----
 .vscode/
 .idea/
 
-# ---- GIS raw/large data ----
+# ---- Raw GIS rasters and vectors ----
 *.tif
 *.tiff
+*.tif.aux.xml
+*.tif.xml
+*.tif.pdf
 *.shp
 *.shx
 *.dbf
 *.prj
 *.cpg
+*.sbn
+*.sbx
 *.gpkg
 *.geojson
+*.qmd
 
-# ---- OnSSET outputs / results ----
+# ---- Large archives (raw data bundles) ----
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+
+# ---- OnSSET model outputs / results ----
 *Results.csv
 *Summaries.csv
 *Variables.csv
@@ -47,10 +61,16 @@ summary/
 Output/
 output/
 outputs/
+*/PSO_test/
 
-# ---- Excel specs (often large/binary, optional) ----
-# Uncomment if you don't want specs files tracked
+# ---- Large spec/reference documents (optional — uncomment if not needed in repo) ----
 # *.xlsx
+# *.pdf
+# *.docx
 
 # ---- Logs ----
 *.log
+
+# ---- Conda env exports (keep only if you want a single canonical one) ----
+# onsset_env.yml
+# onsset_env_flexible.yml
