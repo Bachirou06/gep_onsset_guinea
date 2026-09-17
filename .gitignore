@@ -1,0 +1,56 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---- Virtual environments ----
+onsset_env/
+venv/
+env/
+.venv/
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- IDE ----
+.vscode/
+.idea/
+
+# ---- GIS raw/large data ----
+*.tif
+*.tiff
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.gpkg
+*.geojson
+
+# ---- OnSSET outputs / results ----
+*Results.csv
+*Summaries.csv
+*Variables.csv
+results/
+summary/
+Output/
+output/
+outputs/
+
+# ---- Excel specs (often large/binary, optional) ----
+# Uncomment if you don't want specs files tracked
+# *.xlsx
+
+# ---- Logs ----
+*.log

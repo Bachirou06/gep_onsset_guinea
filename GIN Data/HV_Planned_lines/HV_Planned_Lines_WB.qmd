@@ -1,0 +1,58 @@
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version="3.40.11-Bratislava">
+  <identifier>Guinea Electricity Transmission Network</identifier>
+  <parentidentifier></parentidentifier>
+  <language>EN</language>
+  <type>dataset</type>
+  <title>Guinea Electricity Transmission Network</title>
+  <abstract>Data for medium and high voltage transmission lines were compiled for the AICD study led by the World Bank. A variety of sources were consulted, including regional power pool documents and maps from World Bank project documents. Locations are approximate, intended to reflect main connections, and are not representative of actual "path on the ground". The following attributes were collected: VOLTAGE_KV: Transmission line capacity in kilovolts, FROM_NM: Name of the locality where the link starts, TO_NM: Name of the locality where the link ends, STATUS: Status of link (Existing, Planned, Proposed, Under Study), SOURCES: Source of location or attribute information, PROJECT_NM: Name of project (planned links)
+
+
+
+REQUIRED: A brief narrative summary of the data set.
+
+REQUIRED: A summary of the intentions with which the data set was developed.</abstract>
+  <keywords vocabulary="gmd:topicCategory">
+    <keyword>REQUIRED: Common-use word or phrase used to describe the subject of the data set.</keyword>
+  </keywords>
+  <contact>
+    <name>Siobhan Murray</name>
+    <organization>The World Bank</organization>
+    <position>GIS Anlayst</position>
+    <voice></voice>
+    <fax></fax>
+    <email></email>
+    <role></role>
+  </contact>
+  <links>
+    <link format="" mimeType="" size="" name="Shapefile" url="file://\\DRGAMD02\E$\aicd\web\Power\GIN_Txlines.shp" description="" type="Local Area Network"/>
+  </links>
+  <history>Transmission line features were digitized from hardcopy or generated from start and end nodes. Attributes were assigned using mutliple source documents. </history>
+  <dates/>
+  <fees></fees>
+  <constraints type="Access">REQUIRED: Restrictions and legal prerequisites for accessing the data set.</constraints>
+  <rights>REQUIRED: Restrictions and legal prerequisites for using the data set after access is granted.</rights>
+  <encoding></encoding>
+  <crs>
+    <spatialrefsys nativeFormat="Wkt">
+      <wkt></wkt>
+      <proj4></proj4>
+      <srsid>0</srsid>
+      <srid>0</srid>
+      <authid></authid>
+      <description></description>
+      <projectionacronym></projectionacronym>
+      <ellipsoidacronym></ellipsoidacronym>
+      <geographicflag>false</geographicflag>
+    </spatialrefsys>
+  </crs>
+  <extent>
+    <spatial minx="-14.63781099999999924" maxy="12.32164599999999943" maxx="-8.63296399999999942" maxz="0" dimensions="2" miny="7.47368599999999983" crs="EPSG:4326" minz="0"/>
+    <temporal>
+      <period>
+        <start></start>
+        <end></end>
+      </period>
+    </temporal>
+  </extent>
+</qgis>
