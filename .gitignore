@@ -63,6 +63,11 @@ output/
 outputs/
 */PSO_test/
 
+GIN Data/
+test_data/
+test/
+sample_output/
+
 # ---- Large spec/reference documents (optional — uncomment if not needed in repo) ----
 # *.xlsx
 # *.pdf
