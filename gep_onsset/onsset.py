@@ -1285,11 +1285,12 @@ class SettlementProcessor:
         electrified_loce, electrified_investment = self.get_grid_lcoe(0, 0, 0, year, time_step, end_year, grid_calc)
         electrified_investment = electrified_investment[0]
         grid_investment = np.where(self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] == 1,
-                                   electrified_investment, grid_investment)
+                           electrified_investment, grid_investment)
 
         self.df[SET_LCOE_GRID + "{}".format(year)] = 99
+        self.df[SET_LCOE_GRID + "{}".format(year)] = self.df[SET_LCOE_GRID + "{}".format(year)].astype(float)  # TO -            format the column to prevent incompatible dtype
         self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] == 1,
-                    SET_LCOE_GRID + "{}".format(year)] = grid_price
+            SET_LCOE_GRID + "{}".format(year)] = grid_price
 
         # Two restrictions may be imposed on the grid. The new grid generation capacity that can be added and the
         # number of new households that can be connected. The next step calculates how much of that will be used up due
