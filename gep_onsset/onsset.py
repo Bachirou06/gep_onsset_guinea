@@ -1285,11 +1285,12 @@ class SettlementProcessor:
         electrified_loce, electrified_investment = self.get_grid_lcoe(0, 0, 0, year, time_step, end_year, grid_calc)
         electrified_investment = electrified_investment[0]
         grid_investment = np.where(self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] == 1,
-                                   electrified_investment, grid_investment)
+                           electrified_investment, grid_investment)
 
         self.df[SET_LCOE_GRID + "{}".format(year)] = 99
+        self.df[SET_LCOE_GRID + "{}".format(year)] = self.df[SET_LCOE_GRID + "{}".format(year)].astype(float)  # TO -            format the column to prevent incompatible dtype
         self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] == 1,
-                    SET_LCOE_GRID + "{}".format(year)] = grid_price
+            SET_LCOE_GRID + "{}".format(year)] = grid_price
 
         # Two restrictions may be imposed on the grid. The new grid generation capacity that can be added and the
         # number of new households that can be connected. The next step calculates how much of that will be used up due
@@ -1309,8 +1310,10 @@ class SettlementProcessor:
     def current_mv_line_dist(self):
         # logging.info('Determine current MV line length')
         self.df[SET_MV_CONNECT_DIST] = 0
-        self.df.loc[self.df[SET_ELEC_CURRENT] == 1, SET_MV_CONNECT_DIST] = self.df[SET_HV_DIST_CURRENT]
+        # self.df.loc[self.df[SET_ELEC_CURRENT] == 1, SET_MV_CONNECT_DIST] = self.df[SET_HV_DIST_CURRENT]
         # self.df[SET_MIN_TD_DIST] = self.df[[SET_MV_DIST_PLANNED, SET_HV_DIST_PLANNED]].min(axis=1)
+        self.df[SET_MV_CONNECT_DIST] = self.df[SET_MV_CONNECT_DIST].astype(float) 
+        self.df.loc[self.df[SET_ELEC_CURRENT] == 1, SET_MV_CONNECT_DIST] = self.df[SET_HV_DIST_CURRENT]
 
     def elec_extension(self, grid_calc, max_dist, year, start_year, end_year, time_step, grid_capacity_limit,
                        grid_connect_limit, new_investment, auto_intensification=0, prioritization=0,
@@ -1697,7 +1700,7 @@ class SettlementProcessor:
                 wb_tier_rural = 'CustomNew'
 
             self.df[SET_CAPITA_DEMAND] = 0
-
+            self.df[SET_CAPITA_DEMAND] = self.df[SET_CAPITA_DEMAND].astype(float)  # debug incompatible dtype
             # RUN_PARAM: This shall be changed if different urban/rural categorization is decided
             # Create new columns assigning number of people per household as per Urban/Rural type
             self.df.loc[self.df[SET_URBAN] == 0, SET_NUM_PEOPLE_PER_HH] = num_people_per_hh_rural
@@ -1716,13 +1719,14 @@ class SettlementProcessor:
                                                                               wb_tier_urban_centers)]
 
 
+    
+    
+    ## Setting productive demand targets per year  ## RUN_PARAM: SL! productive uses update
     ## Setting productive demand targets per year  ## RUN_PARAM: SL! productive uses update
     def estimating_non_residential_loads(self, year, time_step, start_year, productive_demand, commercial_demand=True, agri_demand=True):
-        """This method estimates the new productive loads to be added in each time step
-        Arguments
-        ---------
-        year : int
-
+        """This method propagates existing non-residential demand values forward
+        year over year. Health, Education, Agriculture, and Commercial demand are all
+        expected to already be populated on the base columns before this function runs.
         """
 
         if int(productive_demand) == 1:
@@ -1736,32 +1740,36 @@ class SettlementProcessor:
                 self.df[SET_HEALTH_DEMAND + "{}".format(year)] = self.df[SET_HEALTH_DEMAND + "{}".format(year-time_step)]
                 self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_HEALTH_DEMAND + "{}".format(year)] = self.df[SET_HEALTH_DEMAND + "{}".format(year)] - self.df[SET_HEALTH_DEMAND + "{}".format(year - time_step)]
 
-                ## Demand of Education facilities
+            ## Demand of Education facilities
             if year - time_step == start_year:
                 self.df[SET_EDU_DEMAND + "{}".format(year - time_step)] = self.df[SET_EDU_DEMAND]
                 self.df[SET_EDU_DEMAND + "{}".format(year)] = self.df[SET_EDU_DEMAND + "{}".format(year - time_step)]
-                self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_EDU_DEMAND + "{}".format(year)] = 0# self.df[SET_EDU_DEMAND + "{}".format(year)] - self.df[SET_EDU_DEMAND + "{}".format(year - time_step)]
+                self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_EDU_DEMAND + "{}".format(year)] = 0
             else:
                 self.df[SET_EDU_DEMAND + "{}".format(year)] = self.df[SET_EDU_DEMAND + "{}".format(year - time_step)]
-                self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_EDU_DEMAND + "{}".format(year)] = 0  # self.df[SET_EDU_DEMAND + "{}".format(year)] - self.df[SET_EDU_DEMAND + "{}".format(year - time_step)]
+                self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_EDU_DEMAND + "{}".format(year)] = 0
 
-            ## Demand of Commercial activity
+            ## Demand of Commercial activity -- propagated forward, NOT recomputed from GDP
             if commercial_demand:
-                ## Total estimated demand at the end year
-                self.df[SET_COMMERCIAL_DEMAND] = np.where(self.df[SET_POP_CALIB] > 100, (self.df['Commercial_Multiplier'] * self.df[SET_CAPITA_DEMAND] * self.df[SET_POP + "{}".format("2030")]), 0)
-                ## Demand in the specific year
-                self.df[SET_COMMERCIAL_DEMAND + "{}".format(year)] = np.where(self.df[SET_POP_CALIB] > 100, (self.df['Commercial_Multiplier'] * self.df[SET_CAPITA_DEMAND] * self.df[SET_POP + "{}".format(year)]), 0)
-                self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_COMMERCIAL_DEMAND + "{}".format(year)] = (self.df['Commercial_Multiplier'] * self.df[SET_CAPITA_DEMAND] * self.df[SET_NEW_CONNECTIONS + "{}".format(year)])
+                if year - time_step == start_year:
+                    self.df[SET_COMMERCIAL_DEMAND + "{}".format(year - time_step)] = self.df[SET_COMMERCIAL_DEMAND]
+                    self.df[SET_COMMERCIAL_DEMAND + "{}".format(year)] = self.df[SET_COMMERCIAL_DEMAND + "{}".format(year - time_step)]
+                    self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_COMMERCIAL_DEMAND + "{}".format(year)] = self.df[SET_COMMERCIAL_DEMAND + "{}".format(year)] - self.df[SET_COMMERCIAL_DEMAND + "{}".format(year - time_step)]
+                else:
+                    self.df[SET_COMMERCIAL_DEMAND + "{}".format(year)] = self.df[SET_COMMERCIAL_DEMAND + "{}".format(year - time_step)]
+                    self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_COMMERCIAL_DEMAND + "{}".format(year)] = self.df[SET_COMMERCIAL_DEMAND + "{}".format(year)] - self.df[SET_COMMERCIAL_DEMAND + "{}".format(year - time_step)]
             else:
                 self.df[SET_COMMERCIAL_DEMAND + "{}".format(year)] = 0
 
-            ## Demand of Commercial activity
+            ## Demand of Agriculture -- propagated forward, NOT recomputed from Pop*0.1
             if agri_demand:
-                ## Total estimated demand at the end year
-                self.df[SET_AGRI_DEMAND] = np.where(self.df[SET_URBAN] == 0, (self.df[SET_CAPITA_DEMAND] * self.df[SET_POP + "{}".format("2030")] * 0.1), 0)
-                ## Demand in the specific year
-                self.df[SET_AGRI_DEMAND + "{}".format(year)] = np.where(self.df[SET_URBAN] == 0, (self.df[SET_CAPITA_DEMAND] * self.df[SET_POP + "{}".format(year)] * 0.1), 0)
-                self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_AGRI_DEMAND + "{}".format(year)] = (self.df[SET_CAPITA_DEMAND] * self.df[SET_NEW_CONNECTIONS + "{}".format(year)] * 0.1)
+                if year - time_step == start_year:
+                    self.df[SET_AGRI_DEMAND + "{}".format(year - time_step)] = self.df[SET_AGRI_DEMAND]
+                    self.df[SET_AGRI_DEMAND + "{}".format(year)] = self.df[SET_AGRI_DEMAND + "{}".format(year - time_step)]
+                    self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_AGRI_DEMAND + "{}".format(year)] = self.df[SET_AGRI_DEMAND + "{}".format(year)] - self.df[SET_AGRI_DEMAND + "{}".format(year - time_step)]
+                else:
+                    self.df[SET_AGRI_DEMAND + "{}".format(year)] = self.df[SET_AGRI_DEMAND + "{}".format(year - time_step)]
+                    self.df.loc[self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99, SET_AGRI_DEMAND + "{}".format(year)] = self.df[SET_AGRI_DEMAND + "{}".format(year)] - self.df[SET_AGRI_DEMAND + "{}".format(year - time_step)]
             else:
                 self.df[SET_AGRI_DEMAND + "{}".format(year)] = 0
 
@@ -1978,41 +1986,50 @@ class SettlementProcessor:
 
         tiers = [1, 2, 3, 4, 5]
 
+        # Standard ESMAP MTF household annual consumption targets (kWh/household/year),
+        # matched to tier index -- FIX 1: previously hardcoded to 1, which collapsed the
+        # entire hybrid capacity matrix to ~0 (see KNOWN_ISSUE_mg_pv_hybrid_capacity.md)
+        tier_kwh_per_hh = {1: 38.7, 2: 219, 3: 803, 4: 2117, 5: 2993}
+
+        # FIX 2: chained-indexing assignment (matrix[g][:] = ...) writes to a COPY under
+        # pandas Copy-on-Write and NEVER updates the real matrix -- confirmed via
+        # ChainedAssignmentError warnings and empty debug matrices. Replaced with
+        # explicit .loc[:, g] = ... assignments, which write correctly.
         for g in ghi_range:
-            pv_hybrid_lcoe_1[g][:], \
-            pv_hybrid_investment_1[g][:], \
-            pv_hybrid_capacity_1[g][:], \
-            pv_hybrid_ren_share_1[g][:] = pv_diesel_hybrid(1, g, ghi_curve, temp, 1, start_year, end_year,
-                                                           diesel_range=diesel_range,
-                                                           pv_cost_factor=pv_panel_investment)
+            result_1 = pv_diesel_hybrid(tier_kwh_per_hh[1], g, ghi_curve, temp, 1, start_year, end_year,
+                                        diesel_range=diesel_range, pv_cost_factor=pv_panel_investment)
+            pv_hybrid_lcoe_1.loc[:, g] = result_1[0]
+            pv_hybrid_investment_1.loc[:, g] = result_1[1]
+            pv_hybrid_capacity_1.loc[:, g] = result_1[2]
+            pv_hybrid_ren_share_1.loc[:, g] = result_1[3]
 
-            pv_hybrid_lcoe_2[g][:], \
-            pv_hybrid_investment_2[g][:], \
-            pv_hybrid_capacity_2[g][:], \
-            pv_hybrid_ren_share_2[g][:] = pv_diesel_hybrid(1, g, ghi_curve, temp, 2, start_year, end_year,
-                                                           diesel_range=diesel_range,
-                                                           pv_cost_factor=pv_panel_investment)
+            result_2 = pv_diesel_hybrid(tier_kwh_per_hh[2], g, ghi_curve, temp, 2, start_year, end_year,
+                                        diesel_range=diesel_range, pv_cost_factor=pv_panel_investment)
+            pv_hybrid_lcoe_2.loc[:, g] = result_2[0]
+            pv_hybrid_investment_2.loc[:, g] = result_2[1]
+            pv_hybrid_capacity_2.loc[:, g] = result_2[2]
+            pv_hybrid_ren_share_2.loc[:, g] = result_2[3]
 
-            pv_hybrid_lcoe_3[g][:], \
-            pv_hybrid_investment_3[g][:], \
-            pv_hybrid_capacity_3[g][:], \
-            pv_hybrid_ren_share_3[g][:] = pv_diesel_hybrid(1, g, ghi_curve, temp, 3, start_year, end_year,
-                                                           diesel_range=diesel_range,
-                                                           pv_cost_factor=pv_panel_investment)
+            result_3 = pv_diesel_hybrid(tier_kwh_per_hh[3], g, ghi_curve, temp, 3, start_year, end_year,
+                                        diesel_range=diesel_range, pv_cost_factor=pv_panel_investment)
+            pv_hybrid_lcoe_3.loc[:, g] = result_3[0]
+            pv_hybrid_investment_3.loc[:, g] = result_3[1]
+            pv_hybrid_capacity_3.loc[:, g] = result_3[2]
+            pv_hybrid_ren_share_3.loc[:, g] = result_3[3]
 
-            pv_hybrid_lcoe_4[g][:], \
-            pv_hybrid_investment_4[g][:], \
-            pv_hybrid_capacity_4[g][:], \
-            pv_hybrid_ren_share_4[g][:] = pv_diesel_hybrid(1, g, ghi_curve, temp, 4, start_year, end_year,
-                                                           diesel_range=diesel_range,
-                                                           pv_cost_factor=pv_panel_investment)
+            result_4 = pv_diesel_hybrid(tier_kwh_per_hh[4], g, ghi_curve, temp, 4, start_year, end_year,
+                                        diesel_range=diesel_range, pv_cost_factor=pv_panel_investment)
+            pv_hybrid_lcoe_4.loc[:, g] = result_4[0]
+            pv_hybrid_investment_4.loc[:, g] = result_4[1]
+            pv_hybrid_capacity_4.loc[:, g] = result_4[2]
+            pv_hybrid_ren_share_4.loc[:, g] = result_4[3]
 
-            pv_hybrid_lcoe_5[g][:], \
-            pv_hybrid_investment_5[g][:], \
-            pv_hybrid_capacity_5[g][:], \
-            pv_hybrid_ren_share_5[g][:] = pv_diesel_hybrid(1, g, ghi_curve, temp, 5, start_year, end_year,
-                                                           diesel_range=diesel_range,
-                                                           pv_cost_factor=pv_panel_investment)
+            result_5 = pv_diesel_hybrid(tier_kwh_per_hh[5], g, ghi_curve, temp, 5, start_year, end_year,
+                                        diesel_range=diesel_range, pv_cost_factor=pv_panel_investment)
+            pv_hybrid_lcoe_5.loc[:, g] = result_5[0]
+            pv_hybrid_investment_5.loc[:, g] = result_5[1]
+            pv_hybrid_capacity_5.loc[:, g] = result_5[2]
+            pv_hybrid_ren_share_5.loc[:, g] = result_5[3]
 
         def local_hybrid(ghi, diesel, tier):
             ghi = round(ghi, -2)
@@ -2120,31 +2137,44 @@ class SettlementProcessor:
 
         # logging.info('Start')
 
+        # Standard ESMAP MTF household annual consumption targets (kWh/household/year),
+        # matched to tier index -- FIX 1: previously hardcoded to 1 (see
+        # KNOWN_ISSUE_mg_pv_hybrid_capacity.md -- same bug pattern as the PV-hybrid path)
+        tier_kwh_per_hh_wind = {1: 38.7, 2: 219, 3: 803, 4: 2117, 5: 2993}
+
+        # FIX 2: chained-indexing assignment (matrix[w][:] = ...) writes to a COPY under
+        # pandas Copy-on-Write and NEVER updates the real matrix. Replaced with explicit
+        # .loc[:, w] = ... assignments, which write correctly.
         for w in wind_range:
-            wind_hybrid_lcoe_1[w][:], \
-            wind_hybrid_investment_1[w][:], \
-            wind_hybrid_capacity_1[w][:] = wind_diesel_hybrid(1, w, wind_curve, 1, start_year, end_year,
-                                                              diesel_range=diesel_range)
+            wresult_1 = wind_diesel_hybrid(tier_kwh_per_hh_wind[1], w, wind_curve, 1, start_year, end_year,
+                                           diesel_range=diesel_range)
+            wind_hybrid_lcoe_1.loc[:, w] = wresult_1[0]
+            wind_hybrid_investment_1.loc[:, w] = wresult_1[1]
+            wind_hybrid_capacity_1.loc[:, w] = wresult_1[2]
 
-            wind_hybrid_lcoe_2[w][:], \
-            wind_hybrid_investment_2[w][:], \
-            wind_hybrid_capacity_2[w][:] = wind_diesel_hybrid(1, w, wind_curve, 2, start_year, end_year,
-                                                              diesel_range=diesel_range)
+            wresult_2 = wind_diesel_hybrid(tier_kwh_per_hh_wind[2], w, wind_curve, 2, start_year, end_year,
+                                           diesel_range=diesel_range)
+            wind_hybrid_lcoe_2.loc[:, w] = wresult_2[0]
+            wind_hybrid_investment_2.loc[:, w] = wresult_2[1]
+            wind_hybrid_capacity_2.loc[:, w] = wresult_2[2]
 
-            wind_hybrid_lcoe_3[w][:], \
-            wind_hybrid_investment_3[w][:], \
-            wind_hybrid_capacity_3[w][:] = wind_diesel_hybrid(1, w, wind_curve, 3, start_year, end_year,
-                                                              diesel_range=diesel_range)
+            wresult_3 = wind_diesel_hybrid(tier_kwh_per_hh_wind[3], w, wind_curve, 3, start_year, end_year,
+                                           diesel_range=diesel_range)
+            wind_hybrid_lcoe_3.loc[:, w] = wresult_3[0]
+            wind_hybrid_investment_3.loc[:, w] = wresult_3[1]
+            wind_hybrid_capacity_3.loc[:, w] = wresult_3[2]
 
-            wind_hybrid_lcoe_4[w][:], \
-            wind_hybrid_investment_4[w][:], \
-            wind_hybrid_capacity_4[w][:] = wind_diesel_hybrid(1, w, wind_curve, 4, start_year, end_year,
-                                                              diesel_range=diesel_range)
+            wresult_4 = wind_diesel_hybrid(tier_kwh_per_hh_wind[4], w, wind_curve, 4, start_year, end_year,
+                                           diesel_range=diesel_range)
+            wind_hybrid_lcoe_4.loc[:, w] = wresult_4[0]
+            wind_hybrid_investment_4.loc[:, w] = wresult_4[1]
+            wind_hybrid_capacity_4.loc[:, w] = wresult_4[2]
 
-            wind_hybrid_lcoe_5[w][:], \
-            wind_hybrid_investment_5[w][:], \
-            wind_hybrid_capacity_5[w][:] = wind_diesel_hybrid(1, w, wind_curve, 5, start_year, end_year,
-                                                              diesel_range=diesel_range)
+            wresult_5 = wind_diesel_hybrid(tier_kwh_per_hh_wind[5], w, wind_curve, 5, start_year, end_year,
+                                           diesel_range=diesel_range)
+            wind_hybrid_lcoe_5.loc[:, w] = wresult_5[0]
+            wind_hybrid_investment_5.loc[:, w] = wresult_5[1]
+            wind_hybrid_capacity_5.loc[:, w] = wresult_5[2]
 
         # logging.info('Stop')
 
@@ -2790,8 +2820,8 @@ class SettlementProcessor:
         del self.df['TravelReclass']
         del self.df['CommercialReclassified']
 
-    def tech_code_update(self, year):
-        self.df.loc[(self.df[SET_ELEC_FINAL_CODE + "{}".format(year)] == 1) & (self.df['FinalElecCode2020'] != 1),
+    def tech_code_update(self, year, start_year):
+        self.df.loc[(self.df[SET_ELEC_FINAL_CODE + "{}".format(year)] == 1) & (self.df[SET_ELEC_FINAL_CODE + "{}".format(start_year)] != 1),
                     SET_ELEC_FINAL_CODE + "{}".format(year)] = 2
 
         self.df.loc[(self.df[SET_ELEC_FINAL_CODE + "{}".format(year)] == 8),
