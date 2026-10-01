@@ -1989,7 +1989,8 @@ class SettlementProcessor:
         # Standard ESMAP MTF household annual consumption targets (kWh/household/year),
         # matched to tier index -- FIX 1: previously hardcoded to 1, which collapsed the
         # entire hybrid capacity matrix to ~0 (see KNOWN_ISSUE_mg_pv_hybrid_capacity.md)
-        tier_kwh_per_hh = {1: 38.7, 2: 219, 3: 803, 4: 2117, 5: 2993}
+        # ier_kwh_per_hh = {1: 38.7, 2: 219, 3: 803, 4: 2117, 5: 2993}
+        tier_kwh_per_hh = {1: 1, 2: 1, 3: 1, 4: 1, 5: 1}
 
         # FIX 2: chained-indexing assignment (matrix[g][:] = ...) writes to a COPY under
         # pandas Copy-on-Write and NEVER updates the real matrix -- confirmed via
@@ -2140,7 +2141,8 @@ class SettlementProcessor:
         # Standard ESMAP MTF household annual consumption targets (kWh/household/year),
         # matched to tier index -- FIX 1: previously hardcoded to 1 (see
         # KNOWN_ISSUE_mg_pv_hybrid_capacity.md -- same bug pattern as the PV-hybrid path)
-        tier_kwh_per_hh_wind = {1: 38.7, 2: 219, 3: 803, 4: 2117, 5: 2993}
+        #tier_kwh_per_hh_wind = {1: 38.7, 2: 219, 3: 803, 4: 2117, 5: 2993}
+        tier_kwh_per_hh_wind = {1: 1, 2: 1, 3: 1, 4: 1, 5: 1}
 
         # FIX 2: chained-indexing assignment (matrix[w][:] = ...) writes to a COPY under
         # pandas Copy-on-Write and NEVER updates the real matrix. Replaced with explicit
@@ -2229,7 +2231,7 @@ class SettlementProcessor:
         return wind_hybrid_investment, wind_hybrid_capacity
 
     def calculate_off_grid_lcoes(self, mg_hydro_calc, mg_wind_calc, mg_pv_calc, sa_pv_calc, mg_diesel_calc,
-                                 sa_diesel_calc, year, end_year, time_step, diesel_techs=0):
+                                 sa_diesel_calc, year, end_year, time_step, diesel_techs=0 , tech_switches=None):
         """
         Calculate the LCOEs for all off-grid technologies
 
@@ -2249,22 +2251,24 @@ class SettlementProcessor:
                                    base_to_peak=self.df[SET_BASE_TO_PEAK],
                                    additional_mv_line_length=self.df[SET_HYDRO_DIST])
 
-        # #logging.info('Calculate minigrid PV LCOE')
+        # logging.info('Calculate minigrid PV LCOE') , activated the MG_PV
+        self.df[SET_LCOE_MG_PV + "{}".format(year)], mg_pv_investment = \
+            mg_pv_calc.get_lcoe(energy_per_cell=self.df[SET_ENERGY_PER_CELL + "{}".format(year)],
+                                start_year=year - time_step,
+                                end_year=end_year,
+                                people=self.df[SET_POP + "{}".format(year)],
+                                new_connections=self.df[SET_NEW_CONNECTIONS + "{}".format(year)],
+                                total_energy_per_cell=self.df[SET_TOTAL_ENERGY_PER_CELL],
+                                prev_code=self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)],
+                                num_people_per_hh=self.df[SET_NUM_PEOPLE_PER_HH],
+                                grid_cell_area=self.df[SET_GRID_CELL_AREA],
+                                base_to_peak=self.df[SET_BASE_TO_PEAK],
+                                capacity_factor=self.df[SET_GHI] / HOURS_PER_YEAR)
+        self.df.loc[self.df[SET_GHI] <= 1000, SET_LCOE_MG_PV + "{}".format(year)] = 99
+        
         self.df[SET_LCOE_MG_PV + "{}".format(year)] = 99
         mg_pv_investment = mg_hydro_investment * 0
-        # self.df[SET_LCOE_MG_PV + "{}".format(year)], mg_pv_investment = \
-        #     mg_pv_calc.get_lcoe(energy_per_cell=self.df[SET_ENERGY_PER_CELL + "{}".format(year)],
-        #                         start_year=year - time_step,
-        #                         end_year=end_year,
-        #                         people=self.df[SET_POP + "{}".format(year)],
-        #                         new_connections=self.df[SET_NEW_CONNECTIONS + "{}".format(year)],
-        #                         total_energy_per_cell=self.df[SET_TOTAL_ENERGY_PER_CELL],
-        #                         prev_code=self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)],
-        #                         num_people_per_hh=self.df[SET_NUM_PEOPLE_PER_HH],
-        #                         grid_cell_area=self.df[SET_GRID_CELL_AREA],
-        #                         capacity_factor=self.df[SET_GHI] / HOURS_PER_YEAR)
-        # self.df.loc[self.df[SET_GHI] <= 1000, SET_LCOE_MG_PV + "{}".format(year)] = 99
-
+        
         self.df[SET_LCOE_MG_WIND + "{}".format(year)] = 99
         mg_wind_investment = mg_hydro_investment * 0
         # logging.info('Calculate minigrid wind LCOE')
@@ -2338,7 +2342,16 @@ class SettlementProcessor:
         self.df.loc[(self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] > 3) & (
                 self.df[SET_ELEC_FINAL_CODE + "{}".format(year - time_step)] < 99), SET_LCOE_SA_PV + "{}".format(
             year)] = 99
-
+        if tech_switches:
+            switch_cols = { 'sa_pv': SET_LCOE_SA_PV,
+                            'mg_hydro': SET_LCOE_MG_HYDRO,
+                            'mg_pv': SET_LCOE_MG_PV,
+                            'mg_pv_hybrid': SET_LCOE_MG_PV_HYBRID,
+                            'mg_wind_hybrid': SET_LCOE_MG_WIND_HYBRID}
+            for tech, on in tech_switches.items():
+                
+                if not on:
+                    self.df[switch_cols[tech] + "{}".format(year)] = 99
         self.choose_minimum_off_grid_tech(year, mg_hydro_calc)
 
         return sa_diesel_investment, sa_pv_investment, mg_diesel_investment, mg_wind_investment, \
@@ -2372,7 +2385,7 @@ class SettlementProcessor:
         hydro_df = self.df[[SET_HYDRO_FID, SET_HYDRO]].drop_duplicates(subset=SET_HYDRO_FID)
         hydro_df[hydro_used] = 0
         hydro_df = hydro_df.set_index(SET_HYDRO_FID)
-        max_hydro_dist = 5  # the max distance in km to consider hydropower viable
+        max_hydro_dist = 10  # the max distance in km to consider hydropower viable
         additional_capacity = (
                 (self.df[SET_ENERGY_PER_CELL + "{}".format(year)]) /
                 (HOURS_PER_YEAR * mg_hydro_calc.capacity_factor * self.df[SET_BASE_TO_PEAK] *

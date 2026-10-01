@@ -288,7 +288,7 @@ def pv_diesel_hybrid(
 
         return sum_costs / sum_el_gen, investment
 
-    diesel_limit = 0.5
+    diesel_limit = 0   # 0.5
 
     min_lcoe_range = []
     investment_range = []
