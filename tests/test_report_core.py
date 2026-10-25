@@ -86,3 +86,75 @@ def test_variant_summary_columns():
     assert "capacity_mw_cum_ref" not in vs.columns
     r = vs.loc[("BU", 0.22, "optgrid_optmg")]
     assert r["mg_pv_people_2040_pct"] == pytest.approx(27.3, abs=0.1) and r["investment_musd_cum_var"] == 2299.9
+
+
+# --- Task 3: key messages over the core matrix ---------------------------------------------
+def _h(**over):
+    base = {"investment_musd_cum": 2000.0, "people_reached_cum": 18.3e6, "usd_per_new_connection": 110.0,
+            "people_per_musd": 9000.0, "lcoe_energy_w": 0.15, "lcoe_energy_w_excl_dens": 0.25, "grid_ext_people_2040": 3.0e6,
+            "dre_share_new_connections": 0.33, "investment_musd_2030": 500.0, "investment_musd_2040": 1500.0,
+            "unserved_2030": 6.1e6, "grid_share_2040": 0.78, "mg_pv_people_2040": 2.0e6,
+            "new_connections_by_tech": {1: 3e6, 2: 3e6, 3: 4e6, 5: 2e6, 7: 0.1e6}, "grid_ext_share_new_connections": 0.16,
+            "dre_share_pop_2040": 0.22}
+    base.update(over)
+    return base
+
+
+def _core_h():
+    return {"U3R1, Cost-reflective": _h(investment_musd_cum=1400.0, grid_ext_people_2040=0.2e6, dre_share_new_connections=0.52),
+            "U3R1, Hydro cost": _h(investment_musd_cum=1350.0, grid_ext_people_2040=0.6e6, dre_share_new_connections=0.47),
+            "U3R1, Current tariff": _h(investment_musd_cum=1345.0, grid_ext_people_2040=0.3e6, dre_share_new_connections=0.49),
+            "BU, Cost-reflective": _h(investment_musd_cum=2384.6, grid_ext_people_2040=3872.0, dre_share_new_connections=0.495),
+            "BU, Hydro cost": _h(investment_musd_cum=2310.0, grid_ext_people_2040=3.5e6, dre_share_new_connections=0.30),
+            "BU, Current tariff": _h(investment_musd_cum=2307.4, grid_ext_people_2040=3.0e6, dre_share_new_connections=0.331)}
+
+
+def test_minmax_messages_name_core_labels():
+    from report import messages as MS
+    m = MS.km_investment_range(_core_h())
+    assert "U3R1, Current tariff" in m["text"] and "BU, Cost-reflective" in m["text"]
+    assert "demand case" not in m["text"]
+    m2 = MS.km_cost_per_connection({"BU, Cost-reflective": _h(usd_per_new_connection=130.0), "U3R1, Hydro cost": _h(usd_per_new_connection=70.0)})
+    assert "U3R1, Hydro cost" in m2["text"] and "BU, Cost-reflective" in m2["text"]
+
+
+def test_km_regime_effect_names_regimes_and_directions():
+    from report import messages as MS
+    sw = pd.DataFrame([{"demand_case": "BU", "from_cost": 0.22, "to_cost": 0.085, "settlements": 1300, "people": 3.4e6, "flows": [(5, 2, 3.0e6), (3, 2, 0.4e6)]},
+                       {"demand_case": "BU", "from_cost": 0.22, "to_cost": 0.1, "settlements": 1303, "people": 3.0e6, "flows": [(5, 2, 2.9e6)]},
+                       {"demand_case": "TD_Low_minus", "from_cost": 0.22, "to_cost": 0.085, "settlements": 200, "people": 0.4e6, "flows": [(5, 2, 0.4e6)]},
+                       {"demand_case": "TD_Low_minus", "from_cost": 0.22, "to_cost": 0.1, "settlements": 0, "people": 0.0, "flows": []}])
+    m = MS.km_regime_effect(_core_h(), sw)
+    t = m["text"]
+    assert m["id"] == "km-regime" and "BU" in t and "U3R1" in t and "U4R2" not in t
+    assert "hydro-cost regime" in t.lower() or "hydro cost" in t.lower()
+    assert "3.4 million people" in t and "mini-grid PV with battery to grid extension" in t
+    assert "no settlement changes technology" in t            # U3R1 at the current tariff
+    assert "nan" not in t.lower().split()
+
+
+def test_km_supply_variants_filters_on_primary_cost():
+    from report import messages as MS
+    rows = []
+    for cost, mg in ((0.22, 900000.0), (0.1, 570024.0)):
+        for metric, ref, dabs in [("investment_musd_cum", 2300.0, -7.0), ("grid_share_2040", 0.78, -0.02), ("mg_pv_people_2040", 2.0e6, mg)]:
+            rows.append({"demand_case": "BU", "grid_cost": cost, "variant": "optgrid_optmg", "scenario_id": "x", "metric": metric,
+                         "reference": ref, "variant_value": ref + dabs, "delta_abs": dabs, "delta_pct": dabs / ref * 100})
+    vc = pd.DataFrame(rows)
+    m = MS.km_supply_variants(vc)
+    assert "900,000 people" in m["text"] and "570,000" not in m["text"] and "cost-reflective" in m["text"].lower()
+    m2 = MS.km_supply_variants(vc, grid_cost=0.1)
+    assert "570,000 people" in m2["text"] and "current tariff" in m2["text"].lower()
+
+
+def test_key_messages_accepts_core_inputs():
+    from report import messages as MS
+    primary = {"TD_Low_minus": _h(), "BU": _h()}
+    sw = pd.DataFrame(columns=["demand_case", "from_cost", "to_cost", "settlements", "people", "flows"])
+    msgs = MS.key_messages(_core_h(), None, {}, {"BU": {"sites": 30, "settlements": 60, "people": 70011.0, "capacity_mw": 3.2}},
+                           None, switch_df=sw, primary_h=primary)
+    ids = [m["id"] for m in msgs]
+    assert ids[0] == "km-investment" and "km-regime" not in ids and "km-mix" in ids and "km-hydro" in ids
+    sw2 = pd.DataFrame([{"demand_case": "BU", "from_cost": 0.22, "to_cost": 0.1, "settlements": 1, "people": 10.0, "flows": [(5, 2, 10.0)]}])
+    ids2 = [m["id"] for m in MS.key_messages(_core_h(), None, {}, {}, None, switch_df=sw2, primary_h=primary)]
+    assert ids2[1] == "km-regime"

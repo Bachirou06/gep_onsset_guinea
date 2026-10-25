@@ -7,7 +7,7 @@ import math
 
 import pandas as pd
 
-from report.constants import CASE_ORDER, CASE_STUDY_NAME, REFERENCE_COST, SENSITIVITY_CASES
+from report.constants import (CASE_ORDER, CASE_STUDY_NAME, KEY_CASES, PRIMARY_COST, REFERENCE_COST, REGIME_NAME, REGIME_ORDER, SENSITIVITY_CASES, TECH_LABEL, core_label)
 
 
 def _check(x, name="value") -> float:
@@ -83,8 +83,14 @@ def change_clause(delta, unit_text: str, what: str, up: str, down: str) -> str:
 # ---------------------------------------------------------------------------
 # Key messages
 # ---------------------------------------------------------------------------
+def _ordered(headlines: dict) -> list:
+    """Keys of a headlines dict in display order: demand cases in CASE_ORDER, any other key
+    (a core label) in insertion order after them."""
+    return sorted(headlines, key=lambda c: CASE_ORDER.index(c) if c in CASE_ORDER else len(CASE_ORDER))
+
+
 def _minmax(headlines: dict, key: str):
-    items = [(c, _check(headlines[c][key], f"{c}.{key}")) for c in CASE_ORDER if c in headlines]
+    items = [(c, _check(headlines[c][key], f"{c}.{key}")) for c in _ordered(headlines)]
     lo = min(items, key=lambda t: t[1])
     hi = max(items, key=lambda t: t[1])
     return lo, hi
@@ -96,7 +102,7 @@ def km_investment_range(headlines: dict) -> dict:
     return {"id": "km-investment",
             "text": (f"Reaching universal access by 2040 costs between {fmt_musd(lo[1])} ({name(lo[0])}) and "
                      f"{fmt_musd(hi[1])} ({name(hi[0])}) over 2025 to 2040, connecting about "
-                     f"{fmt_people(people)} people in every demand case."),
+                     f"{fmt_people(people)} people in every scenario."),
             "source": "Table 4.1"}
 
 
@@ -139,7 +145,7 @@ def km_cost_per_connection(headlines: dict) -> dict:
     lo, hi = _minmax(headlines, "usd_per_new_connection")
     return {"id": "km-usd-per-connection",
             "text": (f"Capital cost per newly connected person ranges from {fmt_usd(lo[1])} ({name(lo[0])}) to "
-                     f"{fmt_usd(hi[1])} ({name(hi[0])}) across the demand cases; Table 5.1 gives the figure "
+                     f"{fmt_usd(hi[1])} ({name(hi[0])}) across the core scenarios; Table 5.1 gives the figure "
                      f"by technology."),
             "source": "Table 5.1"}
 
@@ -248,7 +254,7 @@ def km_grid_extension_vanishes(sens: pd.DataFrame) -> dict:
 
 def km_newly_electrified_lcoe(headlines: dict) -> dict:
     """The delivered cost of the newly electrified settlements, ordered across the demand cases."""
-    items = [(c, _check(headlines[c]["lcoe_energy_w_excl_dens"], f"{c}.lcoe_excl")) for c in CASE_ORDER if c in headlines]
+    items = [(c, _check(headlines[c]["lcoe_energy_w_excl_dens"], f"{c}.lcoe_excl")) for c in _ordered(headlines)]
     items.sort(key=lambda t: t[1])
     lo, hi = items[0], items[-1]
     listing = ", ".join(f"{fmt_lcoe(v)} ({name(c)})" for c, v in items)
@@ -272,12 +278,71 @@ VARIANT_WORDS = {"optgrid": "removing the grid connection and capacity caps to 2
                  "optgrid_optmg": "removing the grid caps and cutting the mini-grid PV panel cost by a quarter"}
 
 
-def km_supply_variants(vc: pd.DataFrame, case: str = "BU") -> dict:
-    """What the supply-side variants change for one demand case, computed from variant_comparison."""
-    sub = vc[vc["demand_case"] == case]
-    if sub.empty:
-        case = vc["demand_case"].iloc[0]
+def _investment_clause(pct: float) -> str:
+    d = direction(pct / 100, "up", "down", "")
+    return f"investment {d} by {abs(pct):.0f}%" if d else "investment unchanged"
+
+
+def km_regime_effect(core_h: dict, switch_df: pd.DataFrame) -> dict:
+    """What the two subsidised regimes change against the cost-reflective regime, per key case:
+    grid-extension people, decentralised share of new connections, investment, and the
+    settlements that change technology with their largest flow. One clause per present pair."""
+    parts = []
+    for case in KEY_CASES:
+        lab0 = core_label(case, PRIMARY_COST)
+        if lab0 not in core_h:
+            continue
+        h0 = core_h[lab0]
+        clauses = []
+        for cost in [c for c in REGIME_ORDER if c != PRIMARY_COST]:
+            lab = core_label(case, cost)
+            if lab not in core_h:
+                continue
+            h = core_h[lab]
+            inv = (_check(h["investment_musd_cum"], f"{lab}.investment") / _check(h0["investment_musd_cum"], f"{lab0}.investment") - 1) * 100
+            regime = f"the {REGIME_NAME[cost].lower()} regime"
+            sw = (switch_df[(switch_df["demand_case"] == case) & (switch_df["to_cost"] == cost)]
+                  if switch_df is not None and len(switch_df) else pd.DataFrame())
+            if len(sw):
+                r = sw.iloc[0]
+                if r["settlements"] > 0 and r["flows"]:
+                    f0 = r["flows"][0]
+                    sw_text = (f"{fmt_people(r['people'])} people in {fmt_int(r['settlements'])} settlements change technology, "
+                               f"mostly {lc_first(TECH_LABEL[f0[0]])} to {lc_first(TECH_LABEL[f0[1]])}")
+                else:
+                    sw_text = "no settlement changes technology"
+            else:
+                sw_text = "switches not computed"
+            clauses.append(f"under {regime} grid extension serves {fmt_people(h['grid_ext_people_2040'])} people and the "
+                           f"decentralised share of new connections is {fmt_pct(h['dre_share_new_connections'])} "
+                           f"({sw_text}; {_investment_clause(inv)})")
+        if not clauses:
+            continue
+        parts.append(f"{name(case)}: at the cost-reflective cost grid extension serves {fmt_people(h0['grid_ext_people_2040'])} people "
+                     f"and decentralised systems take {fmt_pct(h0['dre_share_new_connections'])} of new connections; " + "; ".join(clauses))
+    text = ". ".join(parts) + "." if parts else "The subsidised regimes were not run for the key cases."
+    return {"id": "km-regime", "text": text, "source": "Tables 4.1 and 9.1"}
+
+
+def km_supply_variants(vc: pd.DataFrame, case: str = "BU", grid_cost: float = PRIMARY_COST) -> dict:
+    """What the supply-side variants change for one demand case at one grid-cost regime,
+    computed from variant_comparison. Falls back to any case or cost present."""
+    if "grid_cost" in vc.columns:
+        pick = vc[(vc["demand_case"] == case) & (vc["grid_cost"] == grid_cost)]
+        if pick.empty:
+            pick = vc[vc["demand_case"] == case]
+        if pick.empty:
+            pick = vc
+        case = pick["demand_case"].iloc[0]
+        grid_cost = float(pick["grid_cost"].iloc[0])
+        sub = pick[(pick["demand_case"] == case) & (pick["grid_cost"] == grid_cost)]
+    else:
         sub = vc[vc["demand_case"] == case]
+        if sub.empty:
+            case = vc["demand_case"].iloc[0]
+            sub = vc[vc["demand_case"] == case]
+        grid_cost = None
+    where = f" at the {REGIME_NAME[grid_cost].lower()} cost" if grid_cost in REGIME_NAME else ""
     parts = []
     for variant, g in sub.groupby("variant", sort=False):
         d = g.set_index("metric")
@@ -290,13 +355,24 @@ def km_supply_variants(vc: pd.DataFrame, case: str = "BU") -> dict:
                      f"{change_clause(inv / 100, f'{abs(inv):.0f}%', 'total investment', 'raises', 'lowers')}, "
                      f"{change_clause(grid / 100, f'{abs(grid):.0f} points', 'the grid share of the 2040 population', 'raises', 'lowers')} "
                      f"and {mg_clause}")
-    return {"id": "km-supply", "text": f"In the {name(case)} case, {'; '.join(parts)}.", "source": "Table 9.4"}
+    return {"id": "km-supply", "text": f"In the {name(case)} case{where}, {'; '.join(parts)}.", "source": "Table 9.2"}
 
 
-def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict, variants: pd.DataFrame = None) -> list:
-    msgs = [km_investment_range(headlines), km_tech_mix(headlines), km_cost_per_connection(headlines),
-            km_people_per_musd(headlines), km_lcoe(headlines), km_newly_electrified_lcoe(headlines),
-            km_unserved_2030(headlines)]
+def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict, variants: pd.DataFrame = None,
+                 switch_df: pd.DataFrame = None, primary_h: dict = None) -> list:
+    """headlines: the core matrix keyed by core label (or demand cases); primary_h: the key cases
+    at the primary regime keyed by demand case (defaults to headlines); switch_df: regime_switch_table."""
+    if primary_h is None:
+        primary_h = headlines
+    msgs = [km_investment_range(headlines)]
+    if switch_df is not None and len(switch_df):
+        msgs.append(km_regime_effect(headlines, switch_df))
+    msgs += [km_tech_mix(primary_h), km_cost_per_connection(headlines), km_people_per_musd(headlines),
+             km_lcoe(headlines), km_newly_electrified_lcoe(headlines), km_unserved_2030(primary_h)]
+    if variants is not None and len(variants):
+        msgs.append(km_supply_variants(variants))
+    if hydro:
+        msgs.append(km_hydro(hydro))
     if sens is not None and len(sens):
         case = "BU" if (sens["demand_case"] == "BU").any() else SENSITIVITY_CASES[0]
         msgs.append(km_grid_cost_sensitivity(sens, case))
@@ -304,10 +380,6 @@ def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict,
             msgs.append(km_grid_extension_vanishes(sens))
     if deltas:
         msgs.append(km_demand_sensitivity(deltas, sens))
-    if hydro:
-        msgs.append(km_hydro(hydro))
-    if variants is not None and len(variants):
-        msgs.append(km_supply_variants(variants))
     for m in msgs:
         if "nan" in m["text"].lower().split():
             raise ValueError(f"message {m['id']} contains nan")
