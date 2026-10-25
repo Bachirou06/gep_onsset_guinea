@@ -290,6 +290,8 @@ def variables_table(control, scenario, params: dict, technologies: dict, extra: 
         ('tier_4', p["tier_4"], 'control file', '', 'MTF tier 4, kWh per household per year'),
         ('tier_5', p["tier_5"], 'control file', '', 'MTF tier 5, kWh per household per year'),
         ('cost_choice', p["cost_choice"], 'control file', '', '2 = total investment only (1 is not available in this code version)'),
+        ('mg_pv_hybrid_cost_factor', p["mg_pv_hybrid_cost_factor"], 'control file', '', 'Multiplier of the PV panel cost (503 USD/kW) inside the PV-battery mini-grid; the notebook passes 1'),
+        ('variant', scenario.variant, 'control file', '', 'Supply-side variant of the demand case'),
         ('min_night_lights', cal["min_night_lights"], 'calibration', '', 'Calibration threshold'),
         ('min_pop', cal["min_pop"], 'calibration', '', 'Calibration threshold'),
         ('max_service_transformer_distance', cal["max_service_transformer_distance"], 'calibration', '', 'Calibration threshold (km)'),
@@ -612,7 +614,7 @@ def run_scenario(control, scenario_id: str, batch_dir, force: bool = False, log=
                                                                                             end_year,
                                                                                             time_step,
                                                                                             mg_pv_hybrid_calc,
-                                                                                            1,
+                                                                                            params["mg_pv_hybrid_cost_factor"],
                                                                                             pv_path)
 
         mg_wind_hybrid_investment, mg_wind_hybrid_capacity = onsseter.calculate_wind_hybrids_lcoe(year,
@@ -682,6 +684,7 @@ def run_scenario(control, scenario_id: str, batch_dir, force: bool = False, log=
         "scenario_id": scenario_id,
         "label": scenario.label,
         "demand_case": scenario.demand_case,
+        "variant": scenario.variant,
         "legacy_name": scenario.legacy_name,
         "status": "complete",
         "started": started,

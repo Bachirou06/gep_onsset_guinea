@@ -108,7 +108,8 @@
     "tier_5": 2993,
     "productive_demand": 1,
     "productive_preference": "Low",
-    "cost_choice": 2
+    "cost_choice": 2,
+    "mg_pv_hybrid_cost_factor": 1
   },
   "scenarios": [
     {

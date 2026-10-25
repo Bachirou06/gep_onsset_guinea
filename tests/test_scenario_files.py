@@ -19,9 +19,22 @@ def sc(gep_path):
     return scenario_control
 
 
-def test_study_file_loads_and_has_fourteen_in_order(sc):
+VARIANT_IDS = ["TD_Low_optgrid_g0.1", "TD_Low_optgrid_optmg_g0.1", "TD_High_optgrid_g0.1", "TD_High_optgrid_optmg_g0.1",
+               "BU_optgrid_g0.1", "BU_optgrid_optmg_g0.1"]
+
+
+def test_study_file_loads_fourteen_in_order_then_the_supply_variants(sc):
     c = sc.load_control(STUDY, check_paths=False)
-    assert c.ids() == EXPECTED_ORDER
+    assert c.ids()[:14] == EXPECTED_ORDER
+    assert c.ids()[14:] == VARIANT_IDS
+    for sid in VARIANT_IDS:
+        s = c.scenario(sid)
+        p = c.resolved(sid)
+        assert s.variant in ("optgrid", "optgrid_optmg") and p["grid_generation_cost"] == 0.1
+        assert p["annual_new_grid_connections_limit_intermediate"] == 999999999
+        assert p["annual_grid_cap_gen_limit_intermediate"] == 999999999
+        assert p["mg_pv_hybrid_cost_factor"] == (0.75 if s.variant == "optgrid_optmg" else 1)
+    assert all(c.scenario(sid).variant == "reference" for sid in EXPECTED_ORDER)
 
 
 @pytest.mark.parametrize("sid,ut,rt,gc", [

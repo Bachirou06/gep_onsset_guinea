@@ -13,6 +13,9 @@ from report.constants import (CACHE_SCHEMA_VERSION, CASE_ORDER, CATEGORY_COLUMNS
                               YEARS)
 
 
+REFERENCE_VARIANT = "reference"
+
+
 @dataclass
 class ScenarioData:
     scenario_id: str
@@ -25,6 +28,7 @@ class ScenarioData:
     settlements: pd.DataFrame
     summaries: pd.DataFrame
     scenario_dir: Path
+    variant: str = REFERENCE_VARIANT     # supply-side variant (optgrid, optgrid_optmg, ...)
 
 
 @dataclass
@@ -36,24 +40,37 @@ class Batch:
     control: dict
     batch_log: str = ""
     checks_md: str = ""
-    _by_case: dict = field(default_factory=dict, repr=False)
+    _by_case: dict = field(default_factory=dict, repr=False)   # case -> variant -> grid_cost -> ScenarioData
 
     def __post_init__(self):
         for s in self.scenarios.values():
-            self._by_case.setdefault(s.demand_case, {})[s.grid_cost] = s
+            self._by_case.setdefault(s.demand_case, {}).setdefault(s.variant, {})[s.grid_cost] = s
 
     def reference(self) -> list:
-        """The demand cases at the reference grid cost, in DEMAND_CASES display order."""
+        """The demand cases at the reference grid cost and reference variant, in display order."""
         out = []
         for case in CASE_ORDER:
-            s = self._by_case.get(case, {}).get(REFERENCE_COST)
+            s = self._by_case.get(case, {}).get(REFERENCE_VARIANT, {}).get(REFERENCE_COST)
             if s is not None:
                 out.append(s)
         return out
 
-    def by_case(self, demand_case: str) -> dict:
-        """grid_cost -> ScenarioData for one demand case."""
-        return dict(self._by_case.get(demand_case, {}))
+    def by_case(self, demand_case: str, variant: str = REFERENCE_VARIANT) -> dict:
+        """grid_cost -> ScenarioData for one demand case and variant."""
+        return dict(self._by_case.get(demand_case, {}).get(variant, {}))
+
+    def variants(self, demand_case: str, grid_cost: float = REFERENCE_COST) -> dict:
+        """variant -> ScenarioData at one grid cost, excluding the reference variant."""
+        return {v: costs[grid_cost] for v, costs in self._by_case.get(demand_case, {}).items()
+                if v != REFERENCE_VARIANT and grid_cost in costs}
+
+    def variant_names(self) -> list:
+        """Non-reference variants present in the batch, in control-file order of first appearance."""
+        seen = []
+        for s in self.scenarios.values():
+            if s.variant != REFERENCE_VARIANT and s.variant not in seen:
+                seen.append(s.variant)
+        return seen
 
     def provenance(self) -> dict:
         ms = [s.manifest for s in self.scenarios.values()]
@@ -205,7 +222,7 @@ def load_batch(batch_dir, repo_root, cache_dir=None, id_subset=None, use_cache=T
             urban_tier=int(p.get("urban_target_tier")), rural_tier=int(p.get("rural_target_tier")),
             label=m.get("label", sid), manifest=m,
             settlements=load_settlements(d, cache_dir, id_subset=id_subset, use_cache=use_cache, log=log),
-            summaries=load_summaries(d), scenario_dir=d)
+            summaries=load_summaries(d), scenario_dir=d, variant=m.get("variant") or REFERENCE_VARIANT)
     comparison = pd.read_csv(batch_dir / "comparison_summary.csv")
     batch_log = (batch_dir / "batch_log.txt").read_text(encoding="utf-8") if (batch_dir / "batch_log.txt").exists() else ""
     checks = (batch_dir / "CHECKS.md").read_text(encoding="utf-8") if (batch_dir / "CHECKS.md").exists() else ""

@@ -10,7 +10,8 @@
       "Run order is the batch order. The five demand cases at the reference cost come first, then the three Table 1 cases at the other cost levels in ascending order.",
       "Calibration-stage levers live in the calibration block and cannot be overridden per scenario. One control file has one calibration.",
       "Inputs and outputs under GuineaRuns/ are never committed.",
-      "Recorded-only keys. existing_grid_cost_ratio, mv_increase_rate and max_mv_line_dist are written to the Variables file for documentation but never reach the model calls, exactly as in the notebook; prioritization must be 5 because the notebook hard-codes 5 in its model calls."
+      "Recorded-only keys. existing_grid_cost_ratio, mv_increase_rate and max_mv_line_dist are written to the Variables file for documentation but never reach the model calls, exactly as in the notebook; prioritization must be 5 because the notebook hard-codes 5 in its model calls.",
+      "Supply-side variants (2026-10-25). optgrid removes the 127,000 connections and 90 MW per year caps to 2030 (full grid expansion); optgrid_optmg adds mg_pv_hybrid_cost_factor 0.75 (PV panels of the PV-battery mini-grid 25 percent cheaper, battery and inverter unchanged). Run for the three Table 1 cases at the reference cost."
     ],
     "input_file_confirmed": "OnSSET_InputFile_20261018_100416.csv confirmed by the colleague on 2026-10-24 as the extraction to use (post extraction fix of commit fff30bd).",
     "superseded_runs": {
@@ -120,7 +121,8 @@
     "tier_5": 2993,
     "productive_demand": 1,
     "productive_preference": "Low",
-    "cost_choice": 2
+    "cost_choice": 2,
+    "mg_pv_hybrid_cost_factor": 1
   },
   "scenarios": [
     {
@@ -256,6 +258,81 @@
         "urban_target_tier": 6,
         "rural_target_tier": 6,
         "grid_generation_cost": 0.22
+      }
+    },
+    {
+      "id": "TD_Low_optgrid_g0.1",
+      "demand_case": "TD_Low",
+      "variant": "optgrid",
+      "label": "Top-down low demand (urban tier 3, rural tier 2), grid cost reference 0.1 USD/kWh, optimistic grid expansion (no connection or capacity cap to 2030)",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 2,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "TD_Low_optgrid_optmg_g0.1",
+      "demand_case": "TD_Low",
+      "variant": "optgrid_optmg",
+      "label": "Top-down low demand (urban tier 3, rural tier 2), grid cost reference 0.1 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 2,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
+      }
+    },
+    {
+      "id": "TD_High_optgrid_g0.1",
+      "demand_case": "TD_High",
+      "variant": "optgrid",
+      "label": "Top-down high demand (urban tier 4, rural tier 3), grid cost reference 0.1 USD/kWh, optimistic grid expansion (no connection or capacity cap to 2030)",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 3,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "TD_High_optgrid_optmg_g0.1",
+      "demand_case": "TD_High",
+      "variant": "optgrid_optmg",
+      "label": "Top-down high demand (urban tier 4, rural tier 3), grid cost reference 0.1 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 3,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
+      }
+    },
+    {
+      "id": "BU_optgrid_g0.1",
+      "demand_case": "BU",
+      "variant": "optgrid",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost reference 0.1 USD/kWh, optimistic grid expansion (no connection or capacity cap to 2030)",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "BU_optgrid_optmg_g0.1",
+      "demand_case": "BU",
+      "variant": "optgrid_optmg",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost reference 0.1 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
       }
     }
   ]

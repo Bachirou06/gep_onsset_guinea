@@ -46,7 +46,9 @@ SCENARIO_KEYS = frozenset({
     "mv_mv_transformer_cost",
     "tier_1", "tier_2", "tier_3", "tier_4", "tier_5",
     "productive_demand", "productive_preference", "cost_choice",
+    "mg_pv_hybrid_cost_factor",     # multiplies the PV panel cost inside the PV-battery mini-grid (notebook literal 1)
 })
+POSITIVE_KEYS = frozenset({"mg_pv_hybrid_cost_factor", "pv_adjustment_factor"})
 
 CALIBRATION_KEYS = frozenset({
     "pop_start_year", "end_year_pop", "urban_ratio_start_year", "urban_ratio_end_year",
@@ -112,6 +114,8 @@ def _check_value(key: str, value):
     if key in NUMBER_KEYS:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ControlError(f"'{key}' must be a number, got {value!r}")
+        if key in POSITIVE_KEYS and value <= 0:
+            raise ControlError(f"'{key}' must be positive, got {value!r}")
 
 
 @dataclass
@@ -121,6 +125,7 @@ class Scenario:
     label: str
     overrides: dict
     legacy_name: str | None = None
+    variant: str = "reference"      # supply-side variant of the demand case (reference, optgrid, ...)
 
 
 @dataclass
@@ -261,8 +266,11 @@ def load_control(path, repo_root=None, check_paths: bool = True) -> Control:
                 _check_tech_switches(overrides[k])
             else:
                 _check_value(k, overrides[k])
+        variant = raw.get("variant", "reference")
+        if not isinstance(variant, str) or not ID_PATTERN.match(variant):
+            raise ControlError(f"scenario '{sid}': variant must be a filename-safe string, got {variant!r}")
         scenarios.append(Scenario(id=sid, demand_case=raw["demand_case"], label=raw["label"],
-                                  overrides=overrides, legacy_name=raw.get("legacy_name")))
+                                  overrides=overrides, legacy_name=raw.get("legacy_name"), variant=variant))
 
     return Control(path=path, repo_root=repo_root, meta=dict(doc["meta"]), paths=paths,
                    calibration=calibration, defaults=defaults, scenarios=scenarios,

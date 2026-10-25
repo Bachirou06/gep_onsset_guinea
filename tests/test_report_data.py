@@ -64,7 +64,7 @@ def test_load_batch_structure(report_sample_batch, repo_root, tmp_path):
     s = b.scenarios["TD_High_g0.078"]
     assert (s.urban_tier, s.rural_tier, s.grid_cost) == (4, 3, 0.078)
     assert s.summaries.loc["Total", "Population2040"] > 0
-    assert len(b.comparison) == 14 * 7 * 2 and len(b.control["scenarios"]) == 14
+    assert len(b.comparison) >= 14 * 7 * 2 and len(b.control["scenarios"]) >= 14
     p = b.provenance()
     assert p["calibrated_csv_sha256"] and p["n_scenarios"] == 14
     assert isinstance(p["git_commits"], list) and p["git_dirty_any"] in (True, False)

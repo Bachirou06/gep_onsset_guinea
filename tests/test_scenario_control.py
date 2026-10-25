@@ -30,6 +30,7 @@ DEFAULTS = {
     "mv_mv_transformer_cost": 10000,
     "tier_1": 38.7, "tier_2": 219, "tier_3": 803, "tier_4": 2117, "tier_5": 2993,
     "productive_demand": 1, "productive_preference": "Low", "cost_choice": 2,
+    "mg_pv_hybrid_cost_factor": 1,
 }
 
 CALIBRATION = {
