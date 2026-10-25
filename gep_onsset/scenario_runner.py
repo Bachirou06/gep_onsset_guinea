@@ -379,3 +379,269 @@ def calibrate(control, out_path=None):
     (out_path.parent / f"{out_path.stem}_parameters.json").write_text(
         json.dumps(calib_info, indent=2), encoding="utf-8")
     return out_path
+
+
+# ---------------------------------------------------------------------------
+# Cells 44 to 64: one scenario
+# ---------------------------------------------------------------------------
+REQUIRED_INPUT_COLUMNS = (
+    "id", "Pop", "PopStartYear", "Pop2030", "Pop2040", "Pop2025", "IsUrban", "GHI", "WindVel",
+    "Hydropower", "HydropowerDist", "HydropowerFID", "TravelHours", "ElecPopCalib", "ElecStart",
+    "GridPenalty", "WindCF", "CurrentMVLineDist", "CurrentHVLineDist", "PlannedMVLineDist",
+    "PlannedHVLineDist", "SubstationDist", "TransformerDist", "RoadDist", "NightLights",
+    "ResidentialDemandTierCustom", "hc_count_com_hc", "hc_count_primary_hc", "hc_count_referral_hc",
+    "FinalElecCode2025",
+)
+
+
+def _git_state(repo_root):
+    import subprocess
+    try:
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True,
+                                text=True, check=True).stdout.strip()
+        dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=repo_root, capture_output=True,
+                                    text=True, check=True).stdout.strip())
+        return commit, dirty
+    except Exception:
+        return None, None
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {("inf" if k == float("inf") else str(k)): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
+def _read_manifest(scenario_dir: Path):
+    p = scenario_dir / "manifest.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def summary_from_manifest(batch_dir, scenario_id: str) -> pd.DataFrame:
+    """Read a finished scenario's Summaries CSV back as the notebook's summary table."""
+    batch_dir = Path(batch_dir)
+    return pd.read_csv(batch_dir / scenario_id / f"{scenario_id}_Summaries.csv", index_col=0)
+
+
+def run_scenario(control, scenario_id: str, batch_dir, force: bool = False, log=print) -> dict:
+    """Run one scenario of the control file into batch_dir/<scenario_id>/.
+
+    Returns the manifest. A scenario whose manifest says complete is skipped
+    unless force. Fails before the loop if the calibrated file lacks a column
+    the notebook cells read.
+    """
+    import datetime as _dt
+    import sys as _sys
+    import time as _time
+    import numpy as _np
+
+    from guinea_demand_customization import apply_customized_demand
+    from scenario_control import ControlError
+
+    scenario = control.scenario(scenario_id)
+    params = control.resolved(scenario_id)
+    batch_dir = Path(batch_dir)
+    out_dir = batch_dir / scenario_id
+
+    existing = _read_manifest(out_dir)
+    if existing and existing.get("status") == "complete" and not force:
+        log(f"[{scenario_id}] complete already, skipped (use force to re-run)")
+        existing["skipped"] = True
+        return existing
+
+    t0 = _time.time()
+    started = _dt.datetime.now().isoformat(timespec="seconds")
+    calibrated_csv = Path(control.paths["calibrated_csv"])
+    if not calibrated_csv.exists():
+        raise ControlError(f"calibrated file not found: {calibrated_csv} (run calibrate first)")
+    log(f"[{scenario_id}] {scenario.label}")
+
+    onsseter = SettlementProcessor(str(calibrated_csv))
+    missing = [c for c in REQUIRED_INPUT_COLUMNS if c not in onsseter.df.columns]
+    if missing:
+        raise ControlError(f"calibrated file {calibrated_csv.name} lacks required columns: "
+                           f"{', '.join(missing)}")
+    rows_in = int(len(onsseter.df))
+
+    technologies = build_technologies(params)
+    start_year = params["start_year"]
+    end_year = params["end_year"]
+    intermediate_year = params["intermediate_year"]
+    yearsofanalysis = [intermediate_year, end_year]
+    eleclimits = {intermediate_year: params["intermediate_electrification_target"],
+                  end_year: params["electrification_rate_target"]}
+    time_steps = {intermediate_year: intermediate_year - start_year, end_year: end_year - intermediate_year}
+    num_people_per_hh_rural = params["num_people_per_hh_rural"]
+    num_people_per_hh_urban = params["num_people_per_hh_urban"]
+    urban_target_tier = params["urban_target_tier"]
+    rural_target_tier = params["rural_target_tier"]
+    productive_demand = params["productive_demand"]
+    diesel_techs = params["diesel_techs"]
+    tech_switches = params["tech_switches"]
+    grid_generation_cost = params["grid_generation_cost"]
+    mv_line_max_length = params["mv_line_max_length"]
+    auto_intensification = params["auto_intensification"]
+    pv_path = str(control.paths["pv_profile"])
+    wind_path = str(control.paths["wind_profile"])
+    grid_calc = technologies["grid"]
+    mg_pv_hybrid_calc = technologies["mg_pv_hybrid"]
+    mg_wind_hybrid_calc = technologies["mg_wind_hybrid"]
+    mg_hydro_calc = technologies["mg_hydro"]
+    mg_wind_calc = technologies["mg_wind"]
+    mg_pv_calc = technologies["mg_pv"]
+    sa_pv_calc = technologies["sa_pv"]
+    mg_diesel_calc = technologies["mg_diesel"]
+    sa_diesel_calc = technologies["sa_diesel"]
+    sa_diesel_cost = technologies["sa_diesel_cost"]
+    mg_diesel_cost = technologies["mg_diesel_cost"]
+
+    # cell 44
+    pop_threshold = params["pop_threshold"]
+    onsseter.df = onsseter.df.loc[onsseter.df[SET_POP] > pop_threshold]
+    # cell 47
+    onsseter.prepare_wtf_tier_columns(num_people_per_hh_rural, num_people_per_hh_urban,
+                                      params["tier_1"], params["tier_2"], params["tier_3"],
+                                      params["tier_4"], params["tier_5"])
+    # cell 48
+    onsseter = apply_customized_demand(onsseter, matrix_path=str(control.paths["productive_matrix"]),
+                                       preference=params["productive_preference"])
+    # cell 52
+    cost_choice = params["cost_choice"]
+
+    # cell 53
+    onsseter.current_mv_line_dist()
+
+    try:
+        onsseter.df.reset_index(inplace=True)
+    except ValueError:
+        pass
+
+    for year in yearsofanalysis:
+
+        eleclimit = eleclimits[year]
+        time_step = time_steps[year]
+
+        if year == end_year:
+            grid_connect_limit = time_step * params["annual_new_grid_connections_limit_end"] * 1000
+            grid_cap_gen_limit = time_step * params["annual_grid_cap_gen_limit_end"] * 1000
+        else:
+            grid_connect_limit = time_step * params["annual_new_grid_connections_limit_intermediate"] * 1000
+            grid_cap_gen_limit = time_step * params["annual_grid_cap_gen_limit_intermediate"] * 1000
+
+        onsseter.set_scenario_variables(year, num_people_per_hh_rural, num_people_per_hh_urban, time_step,
+                                        start_year, urban_target_tier,
+                                        rural_target_tier, productive_demand)
+
+        onsseter.diesel_cost_columns(sa_diesel_cost, mg_diesel_cost, year)
+
+        mg_pv_hybrid_investment, mg_pv_hybrid_capacity = onsseter.calculate_pv_hybrids_lcoe(year,
+                                                                                            year - time_step,
+                                                                                            end_year,
+                                                                                            time_step,
+                                                                                            mg_pv_hybrid_calc,
+                                                                                            1,
+                                                                                            pv_path)
+
+        mg_wind_hybrid_investment, mg_wind_hybrid_capacity = onsseter.calculate_wind_hybrids_lcoe(year,
+                                                                                                  year - time_step,
+                                                                                                  end_year,
+                                                                                                  time_step,
+                                                                                                  mg_wind_hybrid_calc,
+                                                                                                  wind_path)
+
+        sa_diesel_investment, sa_pv_investment, mg_diesel_investment, \
+            mg_wind_investment, mg_hydro_investment, mg_pv_investment = onsseter.calculate_off_grid_lcoes(
+                mg_hydro_calc, mg_wind_calc, mg_pv_calc, sa_pv_calc, mg_diesel_calc, sa_diesel_calc,
+                year, end_year, time_step, diesel_techs, tech_switches=tech_switches)
+
+        grid_investment, grid_cap_gen_limit, grid_connect_limit = onsseter.pre_electrification(grid_generation_cost,
+                                                                                               year,
+                                                                                               time_step,
+                                                                                               end_year,
+                                                                                               grid_calc,
+                                                                                               grid_cap_gen_limit,
+                                                                                               grid_connect_limit)
+
+        onsseter.df[SET_LCOE_GRID + "{}".format(year)], onsseter.df[SET_MIN_GRID_DIST + "{}".format(year)], \
+            onsseter.df[SET_ELEC_ORDER + "{}".format(year)], onsseter.df[SET_MV_CONNECT_DIST], grid_investment = \
+            onsseter.elec_extension(grid_calc,
+                                    mv_line_max_length,
+                                    year,
+                                    start_year,
+                                    end_year,
+                                    time_step,
+                                    grid_cap_gen_limit,
+                                    grid_connect_limit,
+                                    auto_intensification=auto_intensification,
+                                    prioritization=5,
+                                    new_investment=grid_investment,
+                                    threshold=9999999999)
+
+        onsseter.results_columns(year, time_step, 5, auto_intensification)
+
+        onsseter.calculate_investments(sa_diesel_investment, sa_pv_investment, mg_diesel_investment,
+                                       mg_pv_investment, mg_wind_investment, mg_hydro_investment,
+                                       mg_pv_hybrid_investment, mg_wind_hybrid_investment, grid_investment, year)
+
+        onsseter.apply_limitations(eleclimit, year, time_step, 5, auto_intensification)
+
+        onsseter.calculate_new_capacity(mg_pv_hybrid_capacity, mg_wind_hybrid_capacity, mg_hydro_calc, mg_wind_calc,
+                                        mg_pv_calc, sa_pv_calc, mg_diesel_calc, sa_diesel_calc, grid_calc, year)
+
+        onsseter.tech_code_update(year, start_year)
+
+    # cell 55
+    table = summary_table(onsseter.df, yearsofanalysis, cost_choice)
+
+    # cells 62 to 64
+    calibrated_sha = sha256_file(calibrated_csv)
+    variables = variables_table(control, scenario, params, technologies,
+                                extra={"calibrated_csv_sha256": calibrated_sha, "scenario_id": scenario_id})
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = {"results": out_dir / f"{scenario_id}_Results.csv",
+             "summaries": out_dir / f"{scenario_id}_Summaries.csv",
+             "variables": out_dir / f"{scenario_id}_Variables.csv"}
+    onsseter.df.to_csv(paths["results"], index=False)
+    table.to_csv(paths["summaries"], index=True)
+    variables.to_csv(paths["variables"], index=False)
+
+    commit, dirty = _git_state(control.repo_root)
+    manifest = {
+        "scenario_id": scenario_id,
+        "label": scenario.label,
+        "demand_case": scenario.demand_case,
+        "legacy_name": scenario.legacy_name,
+        "status": "complete",
+        "started": started,
+        "finished": _dt.datetime.now().isoformat(timespec="seconds"),
+        "seconds": round(_time.time() - t0, 1),
+        "parameters": _json_safe(params),
+        "calibration": _json_safe(control.calibration),
+        "control_file": str(control.path),
+        "control_file_sha256": control.sha256,
+        "calibrated_csv": str(calibrated_csv),
+        "calibrated_csv_sha256": calibrated_sha,
+        "rows_in": rows_in,
+        "rows_out": int(len(onsseter.df)),
+        "git_commit": commit,
+        "git_dirty": dirty,
+        "python": _sys.version.split()[0],
+        "pandas": pd.__version__,
+        "numpy": _np.__version__,
+        "outputs": {k: {"path": str(p), "bytes": p.stat().st_size} for k, p in paths.items()},
+        "technology_constants": TECH_CONSTANTS,
+        "hydro_viability_km": HYDRO_VIABILITY_KM,
+        "hydro_site_filter": HYDRO_SITE_FILTER,
+    }
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    log(f"[{scenario_id}] complete in {manifest['seconds']} s, {manifest['rows_out']} settlements")
+    return manifest
