@@ -65,6 +65,28 @@ The five earlier runs named `D2_*` and `D3_*` in the shared folder were produced
 on the extraction from before the fix of 20 October 2026 and are superseded;
 the control file records this in `meta.superseded_runs`.
 
+The final scenario set (team decision, 25 October 2026)
+-------------------------------------------------------
+
+The study's final scenarios are the three key demand cases, U3R1
+(`TD_Low_minus`), U4R2 (`TD_High_minus`) and BU, at three grid generation cost
+regimes:
+
+| Regime | Grid cost | Meaning |
+|---|---|---|
+| Cost-reflective | 0.22 USD/kWh | the cost-reflective generation cost of the Mission 300 compact, no subsidy |
+| Hydro cost | 0.085 USD/kWh | the generation cost of a hydro-dominant supply, subsidised |
+| Current tariff | 0.1 USD/kWh | the current subsidised tariff-based level, the reference of the earlier runs |
+
+Nine core scenarios, each with two supply-side variants (`optgrid`: the 2030
+connection and capacity caps removed; `optgrid_optmg`: plus mini-grid PV
+panels 25 percent cheaper). The report presents the core matrix first; the
+cost-reflective regime is the primary one (maps, phasing, KPI tiles), set by
+`PRIMARY_COST` in `report/constants.py`. The earlier cost sweep (0.047,
+0.078, 0.1, 0.22), the bottom-up cost bins and the other demand cases stay in
+the batch as the extended sensitivity of chapter 9. All of it lives in the
+same control file and the same batch.
+
 Building the results report
 ---------------------------
 
