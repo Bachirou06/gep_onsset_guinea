@@ -248,7 +248,8 @@ def switch_map(df_ref, df_alt, year, layers, name_ref, name_alt, title, source_n
             ax.scatter(changed.loc[sel, "X_deg"], changed.loc[sel, "Y_deg"], s=9, c=TECH_COLOUR[c], linewidths=0,
                        zorder=zorder_of(c) + 1, rasterized=True)
             people = float(changed.loc[sel, f"Pop{year}"].sum())
-            handles.append(_swatch(TECH_COLOUR[c], f"Now {TECH_LABEL[c].lower()}\n{int(sel.sum()):,} settlements ({people / 1e6:.2f} M people)"))
+            label = TECH_LABEL[c][0].lower() + TECH_LABEL[c][1:]
+            handles.append(_swatch(TECH_COLOUR[c], f"Now {label}\n{int(sel.sum()):,} settlements ({people / 1e6:.2f} M people)"))
     handles += draw_network(ax, layers)
     _legend(lax, handles, title=f"{len(changed):,} settlements switch\n({total_people / 1e6:.2f} M people)")
     draw_north_arrow(ax)
