@@ -572,7 +572,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
         figs["demand"].append({"id": "fig-9-9", "num": "9.9", "div": "<p class='note'>No other demand case in the batch.</p>", "caption": "Not available.", "source": ""})
     bins_case = "BU" if "BU" in {c for c, _ in core} else SENSITIVITY_CASES[0]
     bins_costs = sorted(batch.by_case(bins_case))
-    bins_ok = len(bins_costs) >= 5
+    bins_ok = len(bins_costs) >= 5 and any(c not in COST_LEVELS for c in bins_costs)   # levels beyond the sweep
     if bins_ok:
         bt = M.cost_bin_table(batch, bins_case)
         tech_pop = bt[[f"pop_share_{TECH_KEY[c]}" for c in SERVED_CODES]].T

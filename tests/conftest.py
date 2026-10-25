@@ -142,13 +142,13 @@ def report_sample_batch(repo_root, report_batch_dir) -> Path:
     return out
 
 
-CORE_COSTS = ("0.047", "0.078", "0.1", "0.22")
+CORE_COSTS = ("0.047", "0.078", "0.085", "0.1", "0.22")
 
 
 @pytest.fixture(scope="session")
 def report_core_sample_batch(report_sample_batch) -> Path:
     """The sample batch restricted to the reference-variant scenarios of the four study
-    grid-cost levels (14 scenarios): no cost bins, no supply-side variants. Used by the
+    grid-cost levels (24 scenarios): no cost bins, no supply-side variants. Used by the
     tests that synthesise bins and variants and by the 'without' tests."""
     import json
     import shutil

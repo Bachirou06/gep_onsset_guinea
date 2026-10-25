@@ -29,7 +29,7 @@ def test_batch_core_returns_present_cells_in_order(report_sample_batch, repo_roo
     keys = list(core)
     assert keys == [k for k in C.CORE_CELLS if k in core]                 # CORE_CELLS order
     for case in C.KEY_CASES:
-        assert (case, 0.22) in core and (case, 0.1) in core
+        assert (case, 0.22) in core and (case, 0.1) in core and (case, 0.085) in core
         assert core[(case, 0.22)].grid_cost == 0.22 and core[(case, 0.22)].variant == "reference"
     labels = b.core_labels()
     assert list(labels) == keys and labels[("BU", 0.22)] == "BU, Cost-reflective"

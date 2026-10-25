@@ -12,11 +12,11 @@ from report.constants import CHAPTERS  # noqa: E402
 
 INPUTS = Path(__file__).resolve().parents[1] / "GuineaRuns" / "Inputs" / "Guinea Data"
 EXPECTED_FIGURES = ["fig-4-1", "fig-4-2", "fig-4-3", "fig-4-4", "fig-4-6", "fig-5-1", "fig-7-2",
-                    "fig-9-1-BU-current_tariff", "fig-9-1-TD_Low_minus-current_tariff", "fig-9-3", "fig-9-3b",
+                    "fig-9-1-BU-current_tariff", "fig-9-1-TD_Low_minus-current_tariff", "fig-9-1-BU-hydro_cost", "fig-9-3", "fig-9-3b",
                     "fig-9-5", "fig-9-6", "fig-9-7", "fig-9-7b", "fig-9-8", "fig-9-9",
                     "fig-9-10", "fig-9-10b", "fig-9-11"]
 EXPECTED_MAPS = ["map-3-1", "map-4-5-BU", "map-4-5-TD_Low_minus", "map-4-5-TD_High_minus", "map-6-1", "map-7-1-BU",
-                 "map-7-1-TD_Low_minus", "map-7-1-TD_High_minus", "map-9-2-BU-current_tariff", "map-9-2-TD_High_minus-current_tariff",
+                 "map-7-1-TD_Low_minus", "map-7-1-TD_High_minus", "map-9-2-BU-current_tariff", "map-9-2-TD_High_minus-current_tariff", "map-9-2-BU-hydro_cost",
                  "map-9-4"]
 
 
@@ -41,7 +41,7 @@ def test_build_writes_html_and_manifest(built):
     path, out_dir = built
     assert path.exists() and path.stat().st_size > 5_000_000      # plotly.js inlined
     m = json.loads((out_dir / "build_manifest.json").read_text(encoding="utf-8"))
-    assert m["batch"] and m["n_scenarios"] == 38 and m["sample"] is True
+    assert m["batch"] and m["n_scenarios"] == 53 and m["sample"] is True
     assert "assets" in m and m["html_bytes"] == path.stat().st_size
     assert m["consistency"] == "skipped (sample)"
 

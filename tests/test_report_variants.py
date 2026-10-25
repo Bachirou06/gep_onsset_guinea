@@ -27,12 +27,12 @@ def batch_with_variants(report_core_sample_batch, tmp_path):
 def test_batch_keeps_reference_and_variant_apart(batch_with_variants, repo_root, tmp_path):
     from report.data import load_batch
     bt = load_batch(batch_with_variants, repo_root, cache_dir=tmp_path / "cache", log=lambda *a: None)
-    assert len(bt.scenarios) == 21 + 1          # 21 reference-sweep scenarios in the core sample plus the synthetic variant
+    assert len(bt.scenarios) == 24 + 1          # 24 reference-sweep scenarios in the core sample plus the synthetic variant
     assert bt.scenarios["BU_optgrid_g0.1"].variant == "optgrid"
     assert bt.scenarios["BU_g0.1"].variant == "reference"
     ref = [s.scenario_id for s in bt.reference()]
     assert "BU_g0.1" in ref and "BU_optgrid_g0.1" not in ref
-    assert set(bt.by_case("BU")) == {0.047, 0.078, 0.1, 0.22}            # reference variant only
+    assert set(bt.by_case("BU")) == {0.047, 0.078, 0.085, 0.1, 0.22}            # reference variant only
     v = bt.variants("BU")
     assert set(v) == {"optgrid"} and v["optgrid"].scenario_id == "BU_optgrid_g0.1"
     assert bt.variant_names() == ["optgrid"]

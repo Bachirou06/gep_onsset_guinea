@@ -32,7 +32,7 @@ def test_cost_bin_table_has_one_row_per_cost_and_shares_sum_to_one(batch_with_bi
     from report.data import load_batch
     bt = load_batch(batch_with_bins, repo_root, cache_dir=tmp_path / "cache", log=lambda *a: None)
     t = M.cost_bin_table(bt, "BU")
-    assert sorted(t.index) == [0.047, 0.078, 0.1, 0.12, 0.16, 0.2, 0.22]
+    assert sorted(t.index) == [0.047, 0.078, 0.085, 0.1, 0.12, 0.16, 0.2, 0.22]
     share_cols = [c for c in t.columns if c.startswith("pop_share_")]
     assert len(share_cols) == 5 and (abs(t[share_cols].sum(axis=1) - 1) < 1e-9).all()
     nc_cols = [c for c in t.columns if c.startswith("nc_share_")]
@@ -64,4 +64,4 @@ def test_report_without_bins_says_so(report_core_sample_batch, repo_root, tmp_pa
     path = build(report_core_sample_batch, repo_root, out_path=tmp_path / "r0.html", inputs_dir=None, maps=False, geo=False,
                  sample=True, log=lambda *a: None)
     html = path.read_text(encoding="utf-8")
-    assert 'id="cost-bins"' in html and "fewer than five" in html
+    assert 'id="cost-bins"' in html and "No cost bins" in html
