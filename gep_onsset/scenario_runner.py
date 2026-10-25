@@ -11,9 +11,13 @@ Cell map:
   55      summary_table
   62      variables_table (notebook rows, then the hidden levers)
 """
+import json
+from pathlib import Path
+
 import pandas as pd
 
 from onsset import *  # noqa: F401,F403  (SET_* constants, Technology, SettlementProcessor)
+from scenario_control import _sha256_file as sha256_file
 
 # ---------------------------------------------------------------------------
 # Cell 32: every literal that is not a control-file key, kept in one place so
@@ -302,3 +306,76 @@ def variables_table(control, scenario, params: dict, technologies: dict, extra: 
     ]
     labels = ['Variable', 'Value', 'Source', 'Comments', 'Description']
     return pd.DataFrame.from_records(list1 + hidden, columns=labels)
+
+
+# ---------------------------------------------------------------------------
+# Cells 34, 36, 37, 39, 40: calibration of the start year
+# ---------------------------------------------------------------------------
+def calibrate(control, out_path=None):
+    """Calibrate the raw extraction and write the calibrated CSV plus its parameters JSON.
+
+    Reproduces notebook cells 34 (population calibration and projection), 36
+    (placeholder columns), 37 (conditioning, grid penalties, wind capacity
+    factors), 39 (electrification calibration) and 40 (export). Returns the CSV path.
+    """
+    cal = control.calibration
+    d = control.defaults
+    out_path = Path(out_path) if out_path is not None else Path(control.paths["calibrated_csv"])
+    raw_path = Path(control.paths["raw_input_csv"])
+
+    onsseter = SettlementProcessor(str(raw_path))
+
+    # cell 34
+    pop_modelled, urban_modelled = onsseter.calibrate_current_pop_and_urban(
+        cal["pop_start_year"], cal["urban_ratio_start_year"])
+    onsseter.project_pop_and_urban(pop_modelled, cal["end_year_pop"], urban_modelled,
+                                   cal["urban_ratio_end_year"], d["start_year"], d["end_year"],
+                                   d["intermediate_year"])
+    # cell 36
+    onsseter.df['PerCapitaDemand'] = 0.0
+    onsseter.df['ElectrificationOrder'] = 0.0
+    onsseter.df['Conflict'] = 0.0
+    # cell 37
+    onsseter.condition_df()
+    onsseter.df['GridPenalty'] = onsseter.grid_penalties(onsseter.df)
+    onsseter.df['WindCF'] = onsseter.calc_wind_cfs()
+    # cell 39
+    elec_modelled, urban_internal_elec_ratio, rural_internal_elec_ratio = onsseter.elec_current_and_future(
+        cal["elec_ratio_start_year"], cal["urban_elec_ratio"], cal["rural_elec_ratio"], d["start_year"],
+        min_night_lights=cal["min_night_lights"], min_pop=cal["min_pop"],
+        max_transformer_dist=cal["max_service_transformer_distance"],
+        max_mv_dist=cal["max_mv_line_distance"], max_hv_dist=cal["max_hv_line_distance"])
+    # cell 40
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    thr = d["pop_threshold"]
+    calibrated = onsseter.df.loc[onsseter.df[SET_POP] > thr]
+    calibrated.to_csv(out_path, index=False)
+
+    # NB : elec_current_and_future renvoie (national, RURAL, URBAIN), mais l'appel
+    # ci-dessus les recoit dans l'ordre (urbain, rural). Donc :
+    #   urban_internal_elec_ratio contient le taux RURAL
+    #   rural_internal_elec_ratio contient le taux URBAIN
+    modelled_urban = float(rural_internal_elec_ratio)
+    modelled_rural = float(urban_internal_elec_ratio)
+
+    calib_info = {
+        'start_year': d["start_year"], 'intermediate_year': d["intermediate_year"], 'end_year': d["end_year"],
+        'pop_start_year': cal["pop_start_year"], 'end_year_pop': cal["end_year_pop"],
+        'urban_ratio_start_year': cal["urban_ratio_start_year"], 'urban_ratio_end_year': cal["urban_ratio_end_year"],
+        'elec_ratio_start_year': cal["elec_ratio_start_year"],
+        'urban_elec_ratio': cal["urban_elec_ratio"], 'rural_elec_ratio': cal["rural_elec_ratio"],
+        'min_night_lights': cal["min_night_lights"], 'min_pop': cal["min_pop"],
+        'max_service_transformer_distance': cal["max_service_transformer_distance"],
+        'max_mv_line_distance': cal["max_mv_line_distance"], 'max_hv_line_distance': cal["max_hv_line_distance"],
+        'pop_threshold_applied': thr,
+        'modelled_elec_rate': float(elec_modelled),
+        'modelled_urban_elec_rate': modelled_urban,
+        'modelled_rural_elec_rate': modelled_rural,
+        'raw_input': str(raw_path),
+        'raw_input_sha256': sha256_file(raw_path),
+        'rows': int(len(calibrated)),
+        'control_file_sha256': control.sha256,
+    }
+    (out_path.parent / f"{out_path.stem}_parameters.json").write_text(
+        json.dumps(calib_info, indent=2), encoding="utf-8")
+    return out_path
