@@ -1,0 +1,261 @@
+{
+  "meta": {
+    "schema_version": "1.0",
+    "study": "Guinea DRE study, GEP-OnSSET scenario matrix (Table 1 plus two demand variants)",
+    "created": "2026-10-24",
+    "notes": [
+      "Hydro mini-grids are only viable within 10 km of a hydro site. This is hard-coded in gep_onsset/onsset.py (max_hydro_dist) and is not a lever.",
+      "Mini-hydro sites above 1 MW are excluded upstream: the extraction used a layer filtered at 1 MW or below, so the Hydropower column holds 0 to 1000 kW only. Not a lever.",
+      "Grid generation cost levels. 0.1 USD/kWh is the reference and the defaults value; 0.078 the low variant; 0.22 the high variant; 0.047 a legacy level kept for continuity with the earlier runs.",
+      "Run order is the batch order. The five demand cases at the reference cost come first, then the three Table 1 cases at the other cost levels in ascending order.",
+      "Calibration-stage levers live in the calibration block and cannot be overridden per scenario. One control file has one calibration.",
+      "Inputs and outputs under GuineaRuns/ are never committed."
+    ],
+    "input_file_confirmed": "OnSSET_InputFile_20261018_100416.csv confirmed by the colleague on 2026-10-24 as the extraction to use (post extraction fix of commit fff30bd).",
+    "superseded_runs": {
+      "D2_bOT_0.047_1": "pre-fix extraction; raster attributes misaligned on 90 percent of settlements",
+      "D2_BOT_0.047_1_10km_H_GL127": "pre-fix extraction; superseded by BU_g0.047",
+      "D2_BOT_0.078_1_10km_H_GL127": "pre-fix extraction; superseded by BU_g0.078",
+      "D3_U4R3_0.047_1_10km_H_GL127": "pre-fix extraction; superseded by TD_High_g0.047",
+      "D3_U4R3_0.078_1_10km_H_GL127": "pre-fix extraction; superseded by TD_High_g0.078"
+    }
+  },
+  "paths": {
+    "raw_input_csv": "GuineaRuns/Inputs/OnSSET_InputFile_20261018_100416.csv",
+    "calibrated_csv": "GuineaRuns/Calibrated/GIN_calibrated_20261018_100416.csv",
+    "pv_profile": "GuineaRuns/Inputs/Guinea Data/Solar profile/gn-2-pv.csv",
+    "wind_profile": "GuineaRuns/Inputs/Guinea Data/Wind profile/gn-2-wind.csv",
+    "productive_matrix": "gep_onsset/productive_uses_matrix.json",
+    "output_root": "GuineaRuns/Outputs"
+  },
+  "calibration": {
+    "pop_start_year": 17521167,
+    "end_year_pop": 27697655,
+    "urban_ratio_start_year": 0.387,
+    "urban_ratio_end_year": 0.45,
+    "elec_ratio_start_year": 0.538,
+    "urban_elec_ratio": 0.91,
+    "rural_elec_ratio": 0.23,
+    "min_night_lights": 0,
+    "min_pop": 50,
+    "max_service_transformer_distance": 2,
+    "max_mv_line_distance": 2,
+    "max_hv_line_distance": 5
+  },
+  "defaults": {
+    "start_year": 2025,
+    "intermediate_year": 2030,
+    "end_year": 2040,
+    "electrification_rate_target": 1,
+    "intermediate_electrification_target": 0.7,
+    "urban_target_tier": 6,
+    "rural_target_tier": 6,
+    "num_people_per_hh_urban": 6.6,
+    "num_people_per_hh_rural": 6.3,
+    "prioritization": 5,
+    "auto_intensification": 0,
+    "annual_new_grid_connections_limit_intermediate": 127,
+    "annual_new_grid_connections_limit_end": 999999999,
+    "annual_grid_cap_gen_limit_intermediate": 90,
+    "annual_grid_cap_gen_limit_end": 999999999,
+    "grid_generation_cost": 0.1,
+    "grid_power_plants_capital_cost": 1363,
+    "grid_losses": 0.167,
+    "existing_grid_cost_ratio": 0.1,
+    "pv_adjustment_factor": 1,
+    "discount_rate": 0.08,
+    "pop_threshold": 0,
+    "diesel_price": 0.5,
+    "diesel_techs": 0,
+    "tech_switches": {
+      "sa_pv": 1,
+      "mg_hydro": 1,
+      "mg_pv": 0,
+      "mg_pv_hybrid": 1,
+      "mg_wind_hybrid": 0
+    },
+    "sa_diesel_capital_cost": {
+      "inf": 938
+    },
+    "mg_diesel_capital_cost": {
+      "inf": 721
+    },
+    "mg_pv_capital_cost": {
+      "inf": 2950
+    },
+    "mg_wind_capital_cost": {
+      "inf": 3750
+    },
+    "mg_hydro_capital_cost": {
+      "inf": 3000
+    },
+    "sa_pv_capital_cost_1": 9620,
+    "sa_pv_capital_cost_2": 8780,
+    "sa_pv_capital_cost_3": 6380,
+    "sa_pv_capital_cost_4": 4470,
+    "sa_pv_capital_cost_5": 6950,
+    "hv_line_capacity": 69,
+    "hv_line_cost": 53000,
+    "mv_line_cost": 7000,
+    "mv_line_capacity": 33,
+    "mv_line_max_length": 50,
+    "mv_increase_rate": 0.1,
+    "max_mv_line_dist": 50,
+    "MV_line_amperage_limit": 8,
+    "lv_line_capacity": 0.24,
+    "lv_line_max_length": 0.5,
+    "lv_line_cost": 4250,
+    "service_Transf_type": 50,
+    "service_Transf_cost": 4250,
+    "max_nodes_per_serv_trans": 300,
+    "hv_lv_transformer_cost": 25000,
+    "hv_mv_transformer_cost": 25000,
+    "mv_lv_transformer_cost": 10000,
+    "mv_mv_transformer_cost": 10000,
+    "tier_1": 38.7,
+    "tier_2": 219,
+    "tier_3": 803,
+    "tier_4": 2117,
+    "tier_5": 2993,
+    "productive_demand": 1,
+    "productive_preference": "Low",
+    "cost_choice": 2
+  },
+  "scenarios": [
+    {
+      "id": "TD_Low_g0.1",
+      "demand_case": "TD_Low",
+      "label": "Top-down low demand (urban tier 3, rural tier 2), grid cost reference 0.1 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 2
+      }
+    },
+    {
+      "id": "TD_Low_minus_g0.1",
+      "demand_case": "TD_Low_minus",
+      "label": "Top-down low demand, lower variant (urban tier 3, rural tier 1), grid cost reference 0.1 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 1
+      }
+    },
+    {
+      "id": "TD_High_g0.1",
+      "demand_case": "TD_High",
+      "label": "Top-down high demand (urban tier 4, rural tier 3), grid cost reference 0.1 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 3
+      }
+    },
+    {
+      "id": "TD_High_plus_g0.1",
+      "demand_case": "TD_High_plus",
+      "label": "Top-down high demand, higher variant (urban tier 5, rural tier 3), grid cost reference 0.1 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 5,
+        "rural_target_tier": 3
+      }
+    },
+    {
+      "id": "BU_g0.1",
+      "demand_case": "BU",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost reference 0.1 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6
+      }
+    },
+    {
+      "id": "TD_Low_g0.047",
+      "demand_case": "TD_Low",
+      "label": "Top-down low demand (urban tier 3, rural tier 2), grid cost legacy 0.047 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.047
+      }
+    },
+    {
+      "id": "TD_High_g0.047",
+      "demand_case": "TD_High",
+      "label": "Top-down high demand (urban tier 4, rural tier 3), grid cost legacy 0.047 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 3,
+        "grid_generation_cost": 0.047
+      }
+    },
+    {
+      "id": "BU_g0.047",
+      "demand_case": "BU",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost legacy 0.047 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.047
+      }
+    },
+    {
+      "id": "TD_Low_g0.078",
+      "demand_case": "TD_Low",
+      "label": "Top-down low demand (urban tier 3, rural tier 2), grid cost low variant 0.078 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.078
+      }
+    },
+    {
+      "id": "TD_High_g0.078",
+      "demand_case": "TD_High",
+      "label": "Top-down high demand (urban tier 4, rural tier 3), grid cost low variant 0.078 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 3,
+        "grid_generation_cost": 0.078
+      }
+    },
+    {
+      "id": "BU_g0.078",
+      "demand_case": "BU",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost low variant 0.078 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.078
+      }
+    },
+    {
+      "id": "TD_Low_g0.22",
+      "demand_case": "TD_Low",
+      "label": "Top-down low demand (urban tier 3, rural tier 2), grid cost high variant 0.22 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.22
+      }
+    },
+    {
+      "id": "TD_High_g0.22",
+      "demand_case": "TD_High",
+      "label": "Top-down high demand (urban tier 4, rural tier 3), grid cost high variant 0.22 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 3,
+        "grid_generation_cost": 0.22
+      }
+    },
+    {
+      "id": "BU_g0.22",
+      "demand_case": "BU",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost high variant 0.22 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.22
+      }
+    }
+  ]
+}
