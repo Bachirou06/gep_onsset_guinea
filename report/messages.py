@@ -165,8 +165,8 @@ def km_lcoe(headlines: dict) -> dict:
             "text": (f"The energy-weighted delivered cost of electricity in 2040 is {fmt_lcoe(lo[1])} ({name(lo[0])}) "
                      f"to {fmt_lcoe(hi[1])} ({name(hi[0])}) over all served settlements, and "
                      f"{fmt_lcoe(ex_lo[1])} to {fmt_lcoe(ex_hi[1])} for the newly electrified settlements alone, "
-                     f"because settlements already on the grid are costed at the {fmt_lcoe(REFERENCE_COST)} "
-                     f"generation cost by construction."),
+                     f"because settlements already on the grid are costed at the generation cost of their regime "
+                     f"by construction."),
             "source": "Table 5.3"}
 
 

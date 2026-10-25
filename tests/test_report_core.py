@@ -158,3 +158,9 @@ def test_key_messages_accepts_core_inputs():
     sw2 = pd.DataFrame([{"demand_case": "BU", "from_cost": 0.22, "to_cost": 0.1, "settlements": 1, "people": 10.0, "flows": [(5, 2, 10.0)]}])
     ids2 = [m["id"] for m in MS.key_messages(_core_h(), None, {}, {}, None, switch_df=sw2, primary_h=primary)]
     assert ids2[1] == "km-regime"
+
+
+def test_km_lcoe_does_not_name_a_single_generation_cost():
+    from report import messages as MS
+    m = MS.km_lcoe(_core_h())
+    assert "0.10 USD/kWh generation cost" not in m["text"] and "generation cost of their regime" in m["text"]
