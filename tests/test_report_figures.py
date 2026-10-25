@@ -28,16 +28,18 @@ def test_stacked_by_tech_two_panels_one_trace_per_tech_per_panel():
 
 
 def test_lines_vs_cost_marks_reference():
+    from report.constants import SENSITIVITY_CASES
     sens = pd.DataFrame([{"demand_case": c, "grid_cost": g, "investment_musd_cum": 1000 + 100 * g}
-                         for c in ("TD_Low", "TD_High", "BU") for g in COST_LEVELS])
+                         for c in SENSITIVITY_CASES for g in COST_LEVELS])
     fig = F.lines_vs_cost(sens, "investment_musd_cum", "Cumulative investment (million USD)")
-    assert len(fig.data) == 3
+    assert len(fig.data) == len(SENSITIVITY_CASES)
     assert any(s.type == "line" for s in fig.layout.shapes)       # reference cost marker
     assert list(fig.data[0].x) == COST_LEVELS
 
 
 def test_grouped_metric_bars_small_multiples():
-    df = pd.DataFrame({"demand_case": CASE_ORDER, "a": [1, 2, 3, 4, 5], "b": [5, 4, 3, 2, 1]})
+    n = len(CASE_ORDER)
+    df = pd.DataFrame({"demand_case": CASE_ORDER, "a": list(range(1, n + 1)), "b": list(range(n, 0, -1))})
     fig = F.grouped_metric_bars(df, ["a", "b"], ["A title", "B title"], CASE_ORDER)
     assert len(fig.data) == 2 and fig.layout.annotations[0].text == "A title"
 

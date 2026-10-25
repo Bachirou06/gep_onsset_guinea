@@ -9,7 +9,7 @@ from report.constants import DEMAND_CASES, RESULT_COLUMNS, REFERENCE_COST, TECH,
 
 def test_constants_are_consistent():
     assert set(TECH) == {1, 2, 3, 5, 7, 99} and TECH_ORDER == [1, 2, 5, 7, 3, 99]
-    assert [c[0] for c in DEMAND_CASES] == ["TD_Low_minus", "TD_Low", "TD_High", "TD_High_plus", "BU"]
+    assert [c[0] for c in DEMAND_CASES] == ["TD_Low_minus", "TD_Low", "TD_High_minus", "TD_High", "TD_High_plus", "BU"]
     assert REFERENCE_COST == 0.1 and "id" in RESULT_COLUMNS and "FinalElecCode2040" in RESULT_COLUMNS
     assert len(set(RESULT_COLUMNS)) == len(RESULT_COLUMNS)
 
@@ -57,7 +57,8 @@ def test_load_batch_structure(report_sample_batch, repo_root, tmp_path):
     assert list(b.scenarios)[:5] == ["TD_Low_g0.1", "TD_Low_minus_g0.1", "TD_High_g0.1",
                                      "TD_High_plus_g0.1", "BU_g0.1"]       # control-file order
     ref = b.reference()
-    assert [s.demand_case for s in ref] == [c[0] for c in DEMAND_CASES]    # DEMAND_CASES order
+    present = [c[0] for c in DEMAND_CASES if c[0] in {s.demand_case for s in b.scenarios.values()}]
+    assert [s.demand_case for s in ref] == present                        # DEMAND_CASES order
     assert all(s.grid_cost == REFERENCE_COST for s in ref)
     bu = b.by_case("BU")
     assert sorted(bu) == [0.047, 0.078, 0.1, 0.22] and bu[0.22].scenario_id == "BU_g0.22"
