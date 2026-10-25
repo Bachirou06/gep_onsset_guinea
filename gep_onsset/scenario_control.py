@@ -72,6 +72,47 @@ TOP_LEVEL_BLOCKS = ("meta", "paths", "calibration", "defaults", "scenarios")
 
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 
+# Keys that the notebook's model calls never read; recorded in the Variables file only.
+# prioritization is hard-coded to 5 in the three model calls (cell 53), so any other
+# value is refused rather than silently ignored.
+RECORDED_ONLY_KEYS = frozenset({"existing_grid_cost_ratio", "mv_increase_rate", "max_mv_line_dist"})
+
+INT_KEYS = frozenset({
+    "start_year", "end_year", "intermediate_year", "urban_target_tier", "rural_target_tier",
+    "prioritization", "cost_choice", "productive_demand", "diesel_techs",
+})
+TIER_KEYS = frozenset({"urban_target_tier", "rural_target_tier"})
+FLAG_KEYS = frozenset({"productive_demand", "diesel_techs"})
+STRING_KEYS = frozenset({"productive_preference"})
+PREFERENCES = ("Low", "Medium", "High")
+NUMBER_KEYS = SCENARIO_KEYS - INT_KEYS - STRING_KEYS - COST_DICT_KEYS - {"tech_switches"}
+
+
+def _check_value(key: str, value):
+    """Type and range rules for one scenario lever; raise ControlError on a violation."""
+    if key in STRING_KEYS:
+        if not isinstance(value, str):
+            raise ControlError(f"'{key}' must be a string, got {value!r}")
+        if key == "productive_preference" and value not in PREFERENCES:
+            raise ControlError(f"'{key}' must be one of Low, Medium or High, got {value!r}")
+        return
+    if key in INT_KEYS:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ControlError(f"'{key}' must be an integer, got {value!r}")
+        if key in TIER_KEYS and not 1 <= value <= 6:
+            raise ControlError(f"'{key}' must be between 1 and 6, got {value!r}")
+        if key in FLAG_KEYS and value not in (0, 1):
+            raise ControlError(f"'{key}' must be 0 or 1, got {value!r}")
+        if key == "cost_choice" and value not in (1, 2):
+            raise ControlError(f"'{key}' must be 1 or 2, got {value!r}")
+        if key == "prioritization" and value != 5:
+            raise ControlError(f"'{key}' must be 5: the notebook hard-codes 5 (nationwide least cost) "
+                               "in its model calls, so another value would be silently ignored")
+        return
+    if key in NUMBER_KEYS:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ControlError(f"'{key}' must be a number, got {value!r}")
+
 
 @dataclass
 class Scenario:
@@ -170,6 +211,11 @@ def load_control(path, repo_root=None, check_paths: bool = True) -> Control:
     calibration = dict(doc["calibration"])
     _check_keys(calibration, CALIBRATION_KEYS, "calibration", required=True)
     _check_tech_switches(defaults["tech_switches"])
+    for k, v in defaults.items():
+        _check_value(k, v)
+    for k, v in calibration.items():
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ControlError(f"'{k}' in 'calibration' must be a number, got {v!r}")
     for k in COST_DICT_KEYS:
         defaults[k] = _convert_cost_dict(k, defaults[k])
 
@@ -211,8 +257,10 @@ def load_control(path, repo_root=None, check_paths: bool = True) -> Control:
                 raise ControlError(f"scenario '{sid}' overrides unknown key '{k}'")
             if k in COST_DICT_KEYS:
                 overrides[k] = _convert_cost_dict(k, overrides[k])
-            if k == "tech_switches":
+            elif k == "tech_switches":
                 _check_tech_switches(overrides[k])
+            else:
+                _check_value(k, overrides[k])
         scenarios.append(Scenario(id=sid, demand_case=raw["demand_case"], label=raw["label"],
                                   overrides=overrides, legacy_name=raw.get("legacy_name")))
 

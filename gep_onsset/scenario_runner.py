@@ -426,6 +426,59 @@ def _read_manifest(scenario_dir: Path):
         return None
 
 
+def skip_reason(existing, params: dict, calibrated_sha: str):
+    """'complete' when a scenario folder's manifest proves the same run already exists.
+
+    Same means: status complete, the same resolved parameters and the same
+    calibrated input hash. Anything else (no manifest, running, other
+    parameters, other input) returns None and the scenario is re-run.
+    """
+    if not existing or existing.get("status") != "complete":
+        return None
+    if existing.get("parameters") != _json_safe(params):
+        return None
+    if existing.get("calibrated_csv_sha256") != calibrated_sha:
+        return None
+    return "complete"
+
+
+def check_calibration_provenance(control, calibrated_csv) -> str:
+    """Compare the calibrated file's sibling parameters JSON with the control file's
+    calibration block. Returns 'verified', or 'unverified' when no sibling exists
+    (for example the colleague's shared calibrated file). Raises ControlError on a
+    mismatch, because the manifest would otherwise claim a calibration that did
+    not produce the input.
+    """
+    from scenario_control import CALIBRATION_KEYS, ControlError
+    calibrated_csv = Path(calibrated_csv)
+    sibling = calibrated_csv.parent / f"{calibrated_csv.stem}_parameters.json"
+    if not sibling.exists():
+        return "unverified"
+    try:
+        info = json.loads(sibling.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return "unverified"
+    mismatches = [k for k in sorted(CALIBRATION_KEYS)
+                  if k in info and info[k] != control.calibration[k]]
+    if mismatches:
+        detail = ", ".join(f"{k}: file {info[k]} vs control {control.calibration[k]}" for k in mismatches)
+        raise ControlError(f"calibrated file {calibrated_csv.name} was produced with another calibration "
+                           f"({detail}); run with --calibrate to regenerate it")
+    return "verified"
+
+
+def complete_scenarios(control, batch_dir) -> list:
+    """Scenario ids of the control file whose folder in batch_dir holds a complete
+    manifest, in control-file order."""
+    batch_dir = Path(batch_dir)
+    out = []
+    for sid in control.ids():
+        m = _read_manifest(batch_dir / sid)
+        if m and m.get("status") == "complete" and (batch_dir / sid / f"{sid}_Summaries.csv").exists():
+            out.append(sid)
+    return out
+
+
 def summary_from_manifest(batch_dir, scenario_id: str) -> pd.DataFrame:
     """Read a finished scenario's Summaries CSV back as the notebook's summary table."""
     batch_dir = Path(batch_dir)
@@ -452,17 +505,28 @@ def run_scenario(control, scenario_id: str, batch_dir, force: bool = False, log=
     batch_dir = Path(batch_dir)
     out_dir = batch_dir / scenario_id
 
-    existing = _read_manifest(out_dir)
-    if existing and existing.get("status") == "complete" and not force:
-        log(f"[{scenario_id}] complete already, skipped (use force to re-run)")
-        existing["skipped"] = True
-        return existing
-
-    t0 = _time.time()
-    started = _dt.datetime.now().isoformat(timespec="seconds")
     calibrated_csv = Path(control.paths["calibrated_csv"])
     if not calibrated_csv.exists():
         raise ControlError(f"calibrated file not found: {calibrated_csv} (run calibrate first)")
+    calibrated_sha = sha256_file(calibrated_csv)
+
+    existing = _read_manifest(out_dir)
+    if not force:
+        if skip_reason(existing, params, calibrated_sha) == "complete":
+            log(f"[{scenario_id}] complete already with the same parameters and input, skipped "
+                "(use force to re-run)")
+            existing["skipped"] = True
+            return existing
+        if existing and existing.get("status") == "complete":
+            log(f"[{scenario_id}] existing outputs are stale (parameters or input changed), re-running")
+
+    provenance = check_calibration_provenance(control, calibrated_csv)
+    if provenance == "unverified":
+        log(f"[{scenario_id}] calibration provenance unverified: no parameters file beside "
+            f"{calibrated_csv.name}")
+
+    t0 = _time.time()
+    started = _dt.datetime.now().isoformat(timespec="seconds")
     log(f"[{scenario_id}] {scenario.label}")
 
     onsseter = SettlementProcessor(str(calibrated_csv))
@@ -603,7 +667,6 @@ def run_scenario(control, scenario_id: str, batch_dir, force: bool = False, log=
     table = summary_table(onsseter.df, yearsofanalysis, cost_choice)
 
     # cells 62 to 64
-    calibrated_sha = sha256_file(calibrated_csv)
     variables = variables_table(control, scenario, params, technologies,
                                 extra={"calibrated_csv_sha256": calibrated_sha, "scenario_id": scenario_id})
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -630,6 +693,7 @@ def run_scenario(control, scenario_id: str, batch_dir, force: bool = False, log=
         "control_file_sha256": control.sha256,
         "calibrated_csv": str(calibrated_csv),
         "calibrated_csv_sha256": calibrated_sha,
+        "calibration_provenance": provenance,
         "rows_in": rows_in,
         "rows_out": int(len(onsseter.df)),
         "git_commit": commit,
@@ -729,6 +793,8 @@ def run_batch(control, ids=None, batch_name=None, force: bool = False, calibrate
             raise
         stamp(sid, "skipped" if m.get("skipped") else m["status"], m.get("seconds", ""))
 
-    comparison_table(control, batch_dir, selected).to_csv(batch_dir / "comparison_summary.csv", index=False)
-    log(f"batch {batch_dir.name}: {len(selected)} scenario(s), comparison_summary.csv written")
+    done = complete_scenarios(control, batch_dir)
+    comparison_table(control, batch_dir, done).to_csv(batch_dir / "comparison_summary.csv", index=False)
+    log(f"batch {batch_dir.name}: {len(selected)} scenario(s) run or skipped, comparison_summary.csv "
+        f"covers the {len(done)} complete scenario(s) of this batch")
     return batch_dir

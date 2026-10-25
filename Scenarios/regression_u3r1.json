@@ -5,7 +5,8 @@
     "created": "2026-10-24",
     "notes": [
       "Runs on GuineaRuns/Inputs/GIN_calibrated.csv exactly as shared; the calibration block is recorded for the Variables file only.",
-      "Expected result: Summaries identical to GuineaRuns/Outputs/Scenario_U3R1_0.047/Scenario_U3R1_0.047_Summaries.csv and the same technology on every settlement."
+      "Expected result: Summaries identical to GuineaRuns/Outputs/Scenario_U3R1_0.047/Scenario_U3R1_0.047_Summaries.csv and the same technology on every settlement.",
+      "Recorded-only keys. existing_grid_cost_ratio, mv_increase_rate and max_mv_line_dist are written to the Variables file for documentation but never reach the model calls, exactly as in the notebook; prioritization must be 5 because the notebook hard-codes 5 in its model calls."
     ]
   },
   "paths": {

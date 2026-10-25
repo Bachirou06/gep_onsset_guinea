@@ -9,7 +9,8 @@
       "Grid generation cost levels. 0.1 USD/kWh is the reference and the defaults value; 0.078 the low variant; 0.22 the high variant; 0.047 a legacy level kept for continuity with the earlier runs.",
       "Run order is the batch order. The five demand cases at the reference cost come first, then the three Table 1 cases at the other cost levels in ascending order.",
       "Calibration-stage levers live in the calibration block and cannot be overridden per scenario. One control file has one calibration.",
-      "Inputs and outputs under GuineaRuns/ are never committed."
+      "Inputs and outputs under GuineaRuns/ are never committed.",
+      "Recorded-only keys. existing_grid_cost_ratio, mv_increase_rate and max_mv_line_dist are written to the Variables file for documentation but never reach the model calls, exactly as in the notebook; prioritization must be 5 because the notebook hard-codes 5 in its model calls."
     ],
     "input_file_confirmed": "OnSSET_InputFile_20261018_100416.csv confirmed by the colleague on 2026-10-24 as the extraction to use (post extraction fix of commit fff30bd).",
     "superseded_runs": {

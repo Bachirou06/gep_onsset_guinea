@@ -37,6 +37,15 @@ Run:
     python run_scenarios.py Scenarios/guinea_scenarios.json --batch 2026-10-24_table1 --force
     python run_scenarios.py Scenarios/guinea_scenarios.json --dry-run             # print resolved parameters, run nothing
 
+Three keys of the control file (`existing_grid_cost_ratio`, `mv_increase_rate`,
+`max_mv_line_dist`) are written to the Variables file for documentation but
+never reach the model calls, exactly as in the notebook; `prioritization` must
+be 5 because the notebook hard-codes it. A scenario whose folder already holds
+a complete manifest with the same parameters and the same calibrated input is
+skipped; if either changed, it is re-run. The calibrated file's sibling
+`_parameters.json` must match the control file's `calibration` block, otherwise
+the run stops and asks for `--calibrate`.
+
 Each scenario writes `<id>_Results.csv`, `<id>_Summaries.csv` and
 `<id>_Variables.csv` (the notebook's formats) plus `manifest.json` (every
 parameter, input file hash, code version, timings) under

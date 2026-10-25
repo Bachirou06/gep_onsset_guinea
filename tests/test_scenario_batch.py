@@ -31,14 +31,15 @@ def test_run_batch_two_scenarios_comparison_and_log(shared_control, shared_batch
 
 
 @pytest.mark.model
-def test_run_batch_subset_rebuilds_comparison_for_subset_without_rerun(shared_control, shared_batch):
+def test_run_batch_subset_skips_and_keeps_whole_batch_comparison(shared_control, shared_batch):
+    """Review finding 3: --only into an existing batch must not shrink the comparison table."""
     from scenario_runner import run_batch
     before = (shared_batch / "BU_g0.1" / "BU_g0.1_Summaries.csv").stat().st_mtime_ns
     b = run_batch(shared_control, ["BU_g0.1"], "shared", log=QUIET)
     assert b == shared_batch
     assert (shared_batch / "BU_g0.1" / "BU_g0.1_Summaries.csv").stat().st_mtime_ns == before
     comp = pd.read_csv(b / "comparison_summary.csv")
-    assert set(comp.scenario_id) == {"BU_g0.1"} and len(comp) == 7 * 2
+    assert set(comp.scenario_id) == {"BU_g0.1", "TD_Low_g0.1"} and len(comp) == 2 * 7 * 2
     assert "skipped" in (b / "batch_log.txt").read_text()
 
 

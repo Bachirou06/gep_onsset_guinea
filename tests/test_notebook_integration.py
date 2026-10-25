@@ -31,6 +31,24 @@ def test_notebook_keeps_calibration_cells_and_strips_outputs():
     assert all(c.get("execution_count") is None for c in nb["cells"] if c["cell_type"] == "code")
 
 
+def test_notebook_calibration_cell_matches_control_file():
+    """Review finding 6: the notebook's calibration levers must equal the control
+    file's calibration block, and section 7 must name the calibrated file it runs on."""
+    import json as _json
+    control = _json.loads((REPO / "Scenarios" / "guinea_scenarios.json").read_text(encoding="utf-8"))
+    cal = control["calibration"]
+    nb = _notebook()
+    code = _code(nb)
+    cell24 = [c for c in code if "urban_ratio_start_year =" in c and "elec_ratio_start_year =" in c][0]
+    for key in ("pop_start_year", "urban_ratio_start_year", "urban_ratio_end_year",
+                "elec_ratio_start_year", "urban_elec_ratio", "rural_elec_ratio"):
+        line = [l for l in cell24.splitlines() if l.strip().startswith(f"{key} =")][0]
+        value = float(line.split("=", 1)[1].split("#")[0].strip())
+        assert value == cal[key], (key, value, cal[key])
+    md = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "markdown")
+    assert control["paths"]["calibrated_csv"].replace("\\", "/") in md
+
+
 def test_notebook_sys_path_is_relative():
     nb = _notebook()
     first = _code(nb)[0]

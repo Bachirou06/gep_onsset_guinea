@@ -33,12 +33,53 @@ the same code path as the command line:
     python run_scenarios.py Scenarios/guinea_scenarios.json --only BU_g0.1
 
 The cells above (sections 1 to 5) remain the interactive calibration front end. Their lever values apply
-to the calibration step only; the control file's `calibration` block must say the same.
+to the calibration step only and are kept equal to the control file's `calibration` block by
+`tools/patch_notebook.py`. The scenario below does not read the calibrated file written by section 5; it
+runs on the control file's own calibrated input, `{calibrated_csv}`, regenerated with
+`python run_scenarios.py Scenarios/guinea_scenarios.json --calibrate`.
 
 Outputs land under `GuineaRuns/Outputs/notebook/<scenario_id>/` as the three CSVs this notebook used to
 write (`_Results`, `_Summaries`, `_Variables`) plus a `manifest.json` recording every parameter, the
 input file hash and the code version.
 """
+
+CALIBRATION_KEYS_IN_CELL = ("pop_start_year", "urban_ratio_start_year", "urban_ratio_end_year",
+                            "elec_ratio_start_year", "urban_elec_ratio", "rural_elec_ratio")
+CONTROL_FILE = REPO / "Scenarios" / "guinea_scenarios.json"
+
+
+def sync_with_control(nb, control: dict) -> bool:
+    """Keep the notebook's calibration cell and the section 7 text equal to the control file.
+
+    Returns True when something changed. Runs on every invocation, patched or not.
+    """
+    import json
+    import re
+    changed = False
+    cal = control["calibration"]
+    for c in nb.cells:
+        if c.cell_type != "code" or "urban_ratio_start_year =" not in c.source:
+            continue
+        lines = c.source.splitlines()
+        for i, line in enumerate(lines):
+            m = re.match(r"^(\w+)\s*=\s*([^#]+?)(\s*#.*)?$", line)
+            if m and m.group(1) in CALIBRATION_KEYS_IN_CELL:
+                value = cal[m.group(1)]
+                comment = m.group(3) or ""
+                new = f"{m.group(1)} = {value}{comment}"
+                if new != line:
+                    lines[i] = new
+                    changed = True
+        new_source = "\n".join(lines)
+        if new_source != c.source:
+            c.source = new_source
+    wanted = MARKDOWN.replace("{calibrated_csv}", control["paths"]["calibrated_csv"].replace("\\", "/"))
+    for c in nb.cells:
+        if c.cell_type == "markdown" and c.source.startswith("# 7. Run a scenario from the control file"):
+            if c.source != wanted:
+                c.source = wanted
+                changed = True
+    return changed
 
 RUN_CELL = """from scenario_control import load_control
 from scenario_runner import run_scenario, summary_from_manifest
@@ -126,13 +167,16 @@ def patch(nb):
 
 
 def main():
+    import json
     nb = nbformat.read(NOTEBOOK, as_version=4)
-    changed = patch(nb)
-    if changed:
+    control = json.loads(CONTROL_FILE.read_text(encoding="utf-8"))
+    structural = patch(nb)
+    synced = sync_with_control(nb, control)
+    if structural or synced:
         nbformat.write(nb, NOTEBOOK)
-        print(f"patched {NOTEBOOK.name}: {len(nb.cells)} cells")
+        print(f"{'patched' if structural else 'synced'} {NOTEBOOK.name}: {len(nb.cells)} cells")
     else:
-        print("already patched, nothing to do")
+        print("already patched and in sync, nothing to do")
     return 0
 
 
