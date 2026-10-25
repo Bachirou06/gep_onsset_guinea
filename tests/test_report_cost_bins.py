@@ -55,8 +55,8 @@ def test_report_gets_the_bins_section(batch_with_bins, repo_root, tmp_path):
     path = build(batch_with_bins, repo_root, out_path=tmp_path / "r.html", inputs_dir=None, maps=False, geo=False,
                  sample=True, log=lambda *a: None)
     html = path.read_text(encoding="utf-8")
-    assert 'id="cost-bins"' in html and 'id="fig-9-9"' in html and 'id="fig-9-9b"' in html and 'id="fig-9-10"' in html
-    assert "Table 9.5" in html
+    assert 'id="cost-bins"' in html and 'id="fig-9-10"' in html and 'id="fig-9-10b"' in html and 'id="fig-9-11"' in html
+    assert "Table 9.6" in html
 
 
 def test_report_without_bins_says_so(report_core_sample_batch, repo_root, tmp_path):

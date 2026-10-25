@@ -12,10 +12,12 @@ from report.constants import CHAPTERS  # noqa: E402
 
 INPUTS = Path(__file__).resolve().parents[1] / "GuineaRuns" / "Inputs" / "Guinea Data"
 EXPECTED_FIGURES = ["fig-4-1", "fig-4-2", "fig-4-3", "fig-4-4", "fig-4-6", "fig-5-1", "fig-7-2",
-                    "fig-9-1", "fig-9-2", "fig-9-3", "fig-9-4", "fig-9-5", "fig-9-5b", "fig-9-5c", "fig-9-7",
-                    "fig-9-8", "fig-9-8b", "fig-9-9", "fig-9-9b", "fig-9-10"]
-EXPECTED_MAPS = ["map-3-1", "map-4-5-BU", "map-4-5-TD_Low", "map-4-5-TD_High_minus", "map-6-1", "map-7-1-BU",
-                 "map-9-6", "map-9-6-TD_High_minus", "map-9-6-BU", "map-9-7"]
+                    "fig-9-1-BU-current_tariff", "fig-9-1-TD_Low_minus-current_tariff", "fig-9-3", "fig-9-3b",
+                    "fig-9-5", "fig-9-6", "fig-9-7", "fig-9-7b", "fig-9-8", "fig-9-9",
+                    "fig-9-10", "fig-9-10b", "fig-9-11"]
+EXPECTED_MAPS = ["map-3-1", "map-4-5-BU", "map-4-5-TD_Low_minus", "map-4-5-TD_High_minus", "map-6-1", "map-7-1-BU",
+                 "map-7-1-TD_Low_minus", "map-7-1-TD_High_minus", "map-9-2-BU-current_tariff", "map-9-2-TD_High_minus-current_tariff",
+                 "map-9-4"]
 
 
 @pytest.fixture(scope="session")
@@ -91,3 +93,18 @@ def test_subfigure_letters_cover_more_than_five_panels():
     from report.build import _letter
     assert [_letter(i) for i in (0, 4, 5)] == ["a", "e", "f"]
     assert _letter(25) == "z" and _letter(26) == "aa"
+
+
+def test_core_tables_and_not_run_cells(built):
+    html = built[0].read_text(encoding="utf-8")
+    i = html.find("Table 1.1")
+    assert i > 0
+    sec = html[i:i + 40000]
+    for lab in ("BU, Cost-reflective", "U3R1, Current tariff", "U4R2, Cost-reflective"):
+        assert lab in sec, lab
+    assert "Table 4.1." in html and "Cost-reflective" in html[html.find("Table 4.1."):html.find("Table 4.1.") + 20000]
+    for sid in ("regime-switches", "supply-variants", "extended", "cost-bins"):
+        assert f'id="{sid}"' in html, sid
+    body = _body(html)
+    for raw in ("grid_ext_people", "dre_share", "lcoe_energy_w", "investment_musd"):
+        assert raw not in body, raw

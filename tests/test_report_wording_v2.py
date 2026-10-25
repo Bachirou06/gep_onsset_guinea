@@ -54,10 +54,11 @@ def test_variant_table_uses_readable_metric_labels(batch_with_variants, repo_roo
     path = build(batch_with_variants, repo_root, out_path=tmp_path / "r.html", inputs_dir=None, maps=False, geo=False,
                  sample=True, log=lambda *a: None)
     html = path.read_text(encoding="utf-8")
-    i = html.find("Table 9.4. Supply-side variants")
+    i = html.find("Table 9.2. Supply-side")
+    assert i > 0
     sec = html[i:i + 60000]
-    assert "People on grid extension 2040" in sec and "People not yet electrified 2030" in sec
-    for raw in ("grid ext people", "mg pv people", "sa pv people", "unserved 2030"):
+    assert "People on grid extension 2040" in sec and "People on mini-grid PV 2040" in sec
+    for raw in ("grid ext people", "mg pv people", "sa pv people", "unserved 2030", "grid_ext_people", "mg_pv_people"):
         assert raw not in sec, raw
 
 

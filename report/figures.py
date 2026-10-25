@@ -14,9 +14,20 @@ LAYOUT = dict(template="simple_white", font=FONT, margin=dict(l=60, r=30, t=70, 
               hoverlabel=dict(font=dict(family=FONT["family"])))
 
 
+_STUDY_TO_CASE = {v: k for k, v in CASE_STUDY_NAME.items()}
+
+
 def _case_label(case: str) -> str:
     name = CASE_STUDY_NAME.get(case, case)
     return name if name == case else f"{name}"
+
+
+def _colour(key: str) -> str:
+    """Colour of a demand case, or of a core label ('BU, Cost-reflective') through its study name."""
+    if key in CASE_COLOUR:
+        return CASE_COLOUR[key]
+    study = str(key).split(",")[0].strip()
+    return CASE_COLOUR.get(_STUDY_TO_CASE.get(study, study), ACCENT)
 
 
 def _apply(fig: go.Figure, title: str, height: int = 460) -> go.Figure:
@@ -50,7 +61,7 @@ def grouped_metric_bars(df: pd.DataFrame, metric_cols: list, titles: list, case_
     d = df.set_index(case_col).reindex(case_order)
     for j, col in enumerate(metric_cols, start=1):
         fig.add_trace(go.Bar(x=[_case_label(k) for k in case_order], y=d[col].to_numpy(),
-                             marker_color=[CASE_COLOUR.get(k, ACCENT) for k in case_order], showlegend=False,
+                             marker_color=[_colour(k) for k in case_order], showlegend=False,
                              hovertemplate="%{x}: %{y:,.2f}<extra></extra>"), row=1, col=j)
     return _apply(fig, title, height=420)
 
@@ -163,9 +174,10 @@ def delta_bars_by_case(df: pd.DataFrame, title: str, label_map: dict | None = No
     metrics = metrics or list(dict.fromkeys(df["metric"]))
     labels = [(label_map or {}).get(m, m) for m in metrics]
     fig = go.Figure()
-    for case in [c for c in CASE_COLOUR if (df["demand_case"] == c).any()]:
+    present = list(dict.fromkeys(df["demand_case"]))
+    for case in [c for c in CASE_COLOUR if c in present] + [c for c in present if c not in CASE_COLOUR]:
         s = df[df["demand_case"] == case].set_index("metric")["delta_pct"].reindex(metrics)
-        fig.add_trace(go.Bar(x=labels, y=s.to_numpy(), name=_case_label(case), marker_color=CASE_COLOUR.get(case, ACCENT),
+        fig.add_trace(go.Bar(x=labels, y=s.to_numpy(), name=_case_label(case), marker_color=_colour(case),
                              text=[f"{v:+.0f}%" if pd.notna(v) else "" for v in s], textposition="outside",
                              hovertemplate=f"{_case_label(case)}<br>%{{x}}: %{{y:+.1f}}%<extra></extra>"))
     fig.update_layout(barmode="group")

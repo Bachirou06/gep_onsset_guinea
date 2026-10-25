@@ -41,7 +41,7 @@
 {# ---------------------------------------------------------------- 1 #}
 <section class="chapter" id="key-messages">
 <h2>1. Key messages</h2>
-<p class="objective">Informs every objective of the study. Each sentence is generated from the tables it cites.</p>
+<p class="objective">Informs every objective of the study. The tiles show the three key cases at the {{ primary_regime | e }} regime; Table 1.1 the nine core scenarios. Each sentence is generated from the tables it cites.</p>
 <div class="kpi-row">
 {% for k in kpis %}
   <div class="kpi"><div class="case">{{ k.study_name | e }}</div><div class="desc">{{ k.description | e }}</div>
@@ -53,6 +53,7 @@
   <div class="val">Delivered LCOE 2040, newly electrified<br><b>{{ k.lcoe_new }}</b></div></div>
 {% endfor %}
 </div>
+<div class="table-wrap">{{ tables.t11 }}</div>
 <ul class="key-messages">
 {% for m in key_messages %}
   <li class="key-message" id="{{ m.id }}">{{ m.text | e }}<span class="src">Source: {{ m.source | e }}</span></li>
@@ -90,8 +91,8 @@
 
 {# ---------------------------------------------------------------- 4 #}
 <section class="chapter" id="reference">
-<h2>4. Least-cost options at the reference grid cost</h2>
-<p class="objective">Objectives 2 and 3: the best electrification options for un-served areas, and the contribution of household solar and solar/hybrid mini-grids for household and productive uses. All five demand cases at {{ reference_cost }} USD/kWh.</p>
+<h2>4. Least-cost options for the final scenario set</h2>
+<p class="objective">Objectives 2 and 3: the best electrification options for un-served areas, and the contribution of household solar and solar/hybrid mini-grids for household and productive uses. The three key demand cases at the three grid-cost regimes ({{ regime_names | join('; ') | e }}).</p>
 <p>{{ reference_text | e }}</p>
 {% for f in figs.ch4 %}
 <figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
@@ -110,7 +111,7 @@
 {# ---------------------------------------------------------------- 5 #}
 <section class="chapter" id="metrics">
 <h2>5. The three study metrics</h2>
-<p class="objective">Objective 6 and the proposal's comparison metrics: delivered cost of electricity, capital cost per new connection and people reached per million USD, by technology and demand case, as the basis for the comparison with grid extension and utility-scale generation.</p>
+<p class="objective">Objective 6 and the proposal's comparison metrics: delivered cost of electricity, capital cost per new connection and people reached per million USD, by technology and core scenario, as the basis for the comparison with grid extension and utility-scale generation.</p>
 <p>{{ metrics_text | e }}</p>
 <figure id="fig-5-1">{{ figs.f51.div }}<figcaption><b>Figure 5.1.</b> {{ figs.f51.caption | e }}</figcaption><p class="source">Source: {{ figs.f51.source | e }}</p></figure>
 <div class="table-wrap">{{ tables.t51 }}</div>
@@ -132,7 +133,7 @@
 {# ---------------------------------------------------------------- 7 #}
 <section class="chapter" id="roadmap">
 <h2>7. Phased roadmap 2030 and 2040</h2>
-<p class="objective">Deliverable 3: a phased electrification roadmap sequencing technologies by area and time horizon.</p>
+<p class="objective">Deliverable 3: a phased electrification roadmap sequencing technologies by area and time horizon, at the {{ primary_regime | e }} regime.</p>
 <p>{{ roadmap_text | e }}</p>
 <div class="table-wrap">{{ tables.t71 }}</div>
 <div class="table-wrap">{{ tables.t71b }}</div>
@@ -145,7 +146,7 @@
 {# ---------------------------------------------------------------- 8 #}
 <section class="chapter" id="corridor">
 <h2>8. Koukoutamba corridor and protected areas</h2>
-<p class="objective">Objective 4 (preparatory): the settlements the planned Koukoutamba transmission line would pass, and the protected areas and localities it affects, under the least-cost results of this batch. The paired with and without Koukoutamba scenario is a separate modelling step.</p>
+<p class="objective">Objective 4 (preparatory): the settlements the planned Koukoutamba transmission line would pass, and the protected areas and localities it affects, under the least-cost results of every core scenario. The paired with and without Koukoutamba scenario is a separate modelling step.</p>
 {% if corridor %}
 <p>{{ corridor_text | e }}</p>
 <div class="table-wrap">{{ tables.t81 }}</div>
@@ -159,20 +160,36 @@
 
 {# ---------------------------------------------------------------- 9 #}
 <section class="chapter" id="sensitivity">
-<h2>9. Sensitivity analysis</h2>
-<p class="objective">Objective 6 (risks): how the results move with the grid generation cost, from the legacy 0.047 to the unsubsidised 0.22 USD/kWh, and with the demand tiers.</p>
+<h2>9. Sensitivity: regimes, supply-side variants and the extended sweep</h2>
+<p class="objective">Objective 6 (risks): how the results move with the grid-cost regime, with the supply-side assumptions and, in the extended sweep, with every grid cost level and the other demand cases.</p>
 <p>{{ sensitivity_text | e }}</p>
-{% for f in figs.ch9 %}
+<h3 id="regime-switches">Regime switches: what the subsidised regimes change</h3>
+<div class="table-wrap">{{ tables.t91 }}</div>
+{% for f in figs.regime %}
 <figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
 {% endfor %}
-<div class="table-wrap">{{ tables.t91 }}</div>
-<div class="table-wrap">{{ tables.t92 }}</div>
-{% for m in maps.ch9 %}
+{% for m in maps.regime %}
 <figure id="{{ m.id }}"><img src="{{ m.uri }}" alt="{{ m.alt | e }}"><figcaption><b>Figure {{ m.num }}.</b> {{ m.caption | e }}</figcaption><p class="source">Source: {{ m.source | e }}</p></figure>
 {% endfor %}
-<h3>Demand variants</h3>
+<h3 id="supply-variants">Supply-side sensitivity at every regime: optimistic grid expansion and mini-grid PV cost</h3>
+{% if variant_names %}
+<p>{{ variants_text | e }}</p>
+<div class="table-wrap">{{ tables.t92 }}</div>
+{% for f in figs.supply %}
+<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
+{% endfor %}
+{% if maps.map94 %}<figure id="map-9-4"><img src="{{ maps.map94.uri }}" alt="{{ maps.map94.alt | e }}"><figcaption><b>Figure {{ maps.map94.num }}.</b> {{ maps.map94.caption | e }}</figcaption><p class="source">Source: {{ maps.map94.source | e }}</p></figure>{% endif %}
+{% else %}
+<p class="note">No supply-side variant was run in this batch.</p>
+{% endif %}
+<h3 id="extended">Extended sensitivity: the full grid-cost sweep and the other demand cases</h3>
+{% for f in figs.sweep %}
+<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
+{% endfor %}
 <div class="table-wrap">{{ tables.t93 }}</div>
-{% for f in figs.ch9b %}
+<div class="table-wrap">{{ tables.t94 }}</div>
+<div class="table-wrap">{{ tables.t95 }}</div>
+{% for f in figs.demand %}
 <figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
 {% endfor %}
 <h3 id="cost-bins">Grid cost bins: how the mix moves with the cost of grid electricity</h3>
@@ -181,20 +198,9 @@
 {% for f in figs.bins %}
 <figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
 {% endfor %}
-<div class="table-wrap">{{ tables.t95 }}</div>
+<div class="table-wrap">{{ tables.t96 }}</div>
 {% else %}
 <p class="note">The bottom-up case was run at fewer than five grid cost levels in this batch, so the heat maps are omitted.</p>
-{% endif %}
-<h3 id="supply-variants">Supply-side variants: optimistic grid expansion and mini-grid PV cost</h3>
-{% if variant_names %}
-<p>{{ variants_text | e }}</p>
-<div class="table-wrap">{{ tables.t94 }}</div>
-{% for f in figs.ch9c %}
-<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
-{% endfor %}
-{% if maps.map97 %}<figure id="map-9-7"><img src="{{ maps.map97.uri }}" alt="{{ maps.map97.alt | e }}"><figcaption><b>Figure {{ maps.map97.num }}.</b> {{ maps.map97.caption | e }}</figcaption><p class="source">Source: {{ maps.map97.source | e }}</p></figure>{% endif %}
-{% else %}
-<p class="note">No supply-side variant was run in this batch.</p>
 {% endif %}
 </section>
 

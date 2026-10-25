@@ -183,7 +183,7 @@ def km_grid_cost_sensitivity(sens: pd.DataFrame, case: str = "BU") -> dict:
                      f"{name(case)} case and moves {fmt_people(hi['switched_people'])} people to another technology, "
                      f"mostly from grid extension ({fmt_people(abs(ext_delta))} fewer people on grid extension) to "
                      f"mini-grid PV; grid extension is the quantity sensitive to the grid cost."),
-            "source": "Figures 9.1 to 9.5, Tables 9.1 and 9.2"}
+            "source": "Figures 9.5 to 9.8, Tables 9.3 and 9.4"}
 
 
 def _grid_cost_swing_pct(sens: pd.DataFrame, case: str = "BU") -> float:
@@ -213,7 +213,7 @@ def km_demand_sensitivity(deltas: dict, sens: pd.DataFrame = None) -> dict:
             parts.append(f"{name(variant)} against {name(base)} {direction(inv / 100, 'raises', 'lowers')} "
                          f"investment by {abs(inv):.0f}% and {cost_clause}")
     if not parts:
-        return {"id": "km-demand", "text": "No demand variant was run in this batch.", "source": "Table 9.3"}
+        return {"id": "km-demand", "text": "No demand variant was run in this batch.", "source": "Table 9.5"}
     text = "; ".join(parts)
     grid_swing = _grid_cost_swing_pct(sens)
     lead = ""
@@ -224,7 +224,7 @@ def km_demand_sensitivity(deltas: dict, sens: pd.DataFrame = None) -> dict:
         else:
             lead = (f"The grid cost moves investment more than the demand tiers ({abs(grid_swing):.0f}% against "
                     f"{max(swings):.0f}%): ")
-    return {"id": "km-demand", "text": f"{lead}{text}.", "source": "Table 9.3"}
+    return {"id": "km-demand", "text": f"{lead}{text}.", "source": "Table 9.5"}
 
 
 def km_grid_extension_vanishes(sens: pd.DataFrame) -> dict:
@@ -249,7 +249,7 @@ def km_grid_extension_vanishes(sens: pd.DataFrame) -> dict:
                 f"{'; '.join(parts)}.")
     else:
         text = f"At {hi} USD/kWh grid extension shrinks to {'; '.join(parts)}."
-    return {"id": "km-grid-extension", "text": text, "source": "Table 9.1"}
+    return {"id": "km-grid-extension", "text": text, "source": "Table 9.3"}
 
 
 def km_newly_electrified_lcoe(headlines: dict) -> dict:
