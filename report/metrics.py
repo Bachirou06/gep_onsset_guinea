@@ -14,8 +14,8 @@ plan's "Metric definitions" section:
 import numpy as np
 import pandas as pd
 
-from report.constants import (CASE_ORDER, COST_LEVELS, GRID_CODES, OFFGRID_CODES, REFERENCE_COST,
-                              SERVED_CODES, TECH_CATEGORY, YEARS)
+from report.constants import (CASE_ORDER, COST_LEVELS, DRE_CODES, GRID_CODES, OFFGRID_CODES, REFERENCE_COST,
+                              SERVED_CODES, TECH_CATEGORY, TECH_KEY, TECH_LABEL, YEARS)
 
 TOTAL = "Total"
 TOTAL_EXCL = "Total excl. densification"
@@ -153,7 +153,20 @@ def headline(df: pd.DataFrame) -> dict:
     cum = cumulative_table(df)
     cm = consultancy_metrics(df)
     shares = category_shares(df, 2040)
+    nc_by_tech = {c: float(cum.loc[c, "new_connections_cum"]) for c in SERVED_CODES}
+    nc_total = float(cum.loc[TOTAL, "new_connections_cum"])
+    pop_by_tech = {c: float(df.loc[df["FinalElecCode2040"] == c, "Pop2040"].sum()) for c in SERVED_CODES}
+    pop_total = float(df["Pop2040"].sum())
+    dre_nc = sum(nc_by_tech[c] for c in DRE_CODES)
+    dre_pop = sum(pop_by_tech[c] for c in DRE_CODES)
     return {
+        "new_connections_by_tech": nc_by_tech,
+        "population_2040_by_tech": pop_by_tech,
+        "dre_new_connections": dre_nc,
+        "dre_share_new_connections": dre_nc / nc_total if nc_total else float("nan"),
+        "dre_people_2040": dre_pop,
+        "dre_share_pop_2040": dre_pop / pop_total if pop_total else float("nan"),
+        "grid_ext_share_new_connections": nc_by_tech[2] / nc_total if nc_total else float("nan"),
         "population_2040": float(df["Pop2040"].sum()),
         "population_2030": float(df["Pop2030"].sum()),
         "unserved_2030": float(df.loc[df["FinalElecCode2030"] == 99, "Pop2030"].sum()),
@@ -175,6 +188,22 @@ def headline(df: pd.DataFrame) -> dict:
         "grid_ext_people_2040": float(df.loc[df["FinalElecCode2040"] == 2, "Pop2040"].sum()),
         "grid_ext_settlements_2040": int((df["FinalElecCode2040"] == 2).sum()),
     }
+
+
+def mix_table(frames: dict) -> pd.DataFrame:
+    """Technology shares per demand case on two bases: new connections 2025 to 2040 (served
+    rows) and the 2040 population (every settlement, including those already on the grid).
+    Multi-index (demand_case, basis); columns are technology labels plus 'total'."""
+    rows = {}
+    for case, df in frames.items():
+        h = headline(df)
+        nc, pop = h["new_connections_by_tech"], h["population_2040_by_tech"]
+        nc_t, pop_t = sum(nc.values()), float(df["Pop2040"].sum())
+        rows[(case, "new_connections")] = {**{TECH_LABEL[c]: (nc[c] / nc_t if nc_t else float("nan")) for c in SERVED_CODES}, "total": nc_t}
+        rows[(case, "population_2040")] = {**{TECH_LABEL[c]: (pop[c] / pop_t if pop_t else float("nan")) for c in SERVED_CODES}, "total": pop_t}
+    out = pd.DataFrame.from_dict(rows, orient="index")
+    out.index = pd.MultiIndex.from_tuples(out.index, names=["demand_case", "basis"])
+    return out
 
 
 def category_shares(df: pd.DataFrame, year: int, newly_electrified_only: bool = False) -> pd.Series:
@@ -421,6 +450,37 @@ def variant_comparison(batch, grid_cost: float = REFERENCE_COST) -> pd.DataFrame
                              "delta_pct": (v - b) / b * 100 if b else float("nan")})
     return pd.DataFrame(rows, columns=["demand_case", "variant", "scenario_id", "metric", "reference", "variant_value",
                                        "delta_abs", "delta_pct"])
+
+
+def cost_bin_table(batch, case: str = "BU") -> pd.DataFrame:
+    """One row per grid cost level run for the case (reference variant): population and
+    new-connection shares by technology, cumulative investment, grid-extension people,
+    delivered LCOE of the newly electrified settlements and USD per new connection."""
+    rows = {}
+    for cost, s in sorted(batch.by_case(case).items()):
+        h = headline(s.settlements)
+        nc, pop = h["new_connections_by_tech"], h["population_2040_by_tech"]
+        nc_t, pop_t = sum(nc.values()), float(s.settlements["Pop2040"].sum())
+        row = {f"pop_share_{TECH_KEY[c]}": pop[c] / pop_t if pop_t else float("nan") for c in SERVED_CODES}
+        row.update({f"nc_share_{TECH_KEY[c]}": nc[c] / nc_t if nc_t else float("nan") for c in SERVED_CODES})
+        row.update({"investment_musd_cum": h["investment_musd_cum"], "capacity_mw_cum": h["capacity_mw_cum"],
+                    "grid_ext_people_2040": h["grid_ext_people_2040"], "grid_ext_settlements_2040": h["grid_ext_settlements_2040"],
+                    "lcoe_energy_w_excl_dens": h["lcoe_energy_w_excl_dens"], "usd_per_new_connection": h["usd_per_new_connection"],
+                    "dre_share_new_connections": h["dre_share_new_connections"], "scenario_id": s.scenario_id})
+        rows[cost] = row
+    out = pd.DataFrame.from_dict(rows, orient="index")
+    out.index.name = "grid_cost"
+    return out
+
+
+def cost_bin_region_table(batch, case: str = "BU", year: int = 2040) -> pd.DataFrame:
+    """Grid share of the population by region (rows) and grid cost level (columns)."""
+    cols = {}
+    for cost, s in sorted(batch.by_case(case).items()):
+        cols[cost] = region_table(s.settlements, year)["grid_share"]
+    out = pd.DataFrame(cols)
+    out.index.name = "region"
+    return out.loc[out.mean(axis=1).sort_values(ascending=False).index]
 
 
 def never_grid_table(batch) -> pd.DataFrame:

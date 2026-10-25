@@ -39,8 +39,12 @@ def _headlines():
             "offgrid_share_2040": 0.26, "sa_pv_people_2040": 5_720_000.0, "mg_pv_people_2040": 1_580_000.0,
             "mg_hydro_people_2040": 31_000.0, "grid_ext_people_2040": 2_100_000.0, "grid_ext_settlements_2040": 1200,
             "unserved_2030": 6_110_000.0, "investment_musd_2030": 420.6, "investment_musd_2040": 1331.8}
+    base.update({"new_connections_by_tech": {1: 4.7e6, 2: 2.1e6, 3: 5.7e6, 5: 1.6e6, 7: 3.1e4},
+                 "population_2040_by_tech": {1: 18.6e6, 2: 2.1e6, 3: 5.7e6, 5: 1.6e6, 7: 3.1e4},
+                 "dre_new_connections": 7.33e6, "dre_share_new_connections": 0.52, "dre_people_2040": 7.33e6,
+                 "dre_share_pop_2040": 0.26, "grid_ext_share_new_connections": 0.15})
     h = {}
-    for i, case in enumerate(["TD_Low_minus", "TD_Low", "TD_High", "TD_High_plus", "BU"]):
+    for i, case in enumerate(["TD_Low_minus", "TD_Low", "TD_High_minus", "TD_High", "TD_High_plus", "BU"]):
         d = dict(base)
         d["investment_musd_cum"] = 1300 + 400 * i
         d["lcoe_energy_w"] = 0.16 + 0.01 * i
@@ -65,7 +69,7 @@ def test_key_messages_are_complete_sentences_from_numbers():
         assert any(ch.isdigit() for ch in m["text"]) and "nan" not in m["text"].lower()
         assert "—" not in m["text"]
     text = " ".join(m["text"] for m in msgs)
-    assert "1,300 million USD" in text and "2,900 million USD" in text        # investment range
+    assert "1,300 million USD" in text and "3,300 million USD" in text        # investment range over six cases
     assert "0.22" in text and "0.1" in text                                    # grid-cost sensitivity
     assert "13 sites" in text or "13 hydro" in text
 

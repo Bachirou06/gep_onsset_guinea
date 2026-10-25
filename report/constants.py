@@ -22,13 +22,16 @@ CATEGORY_COLOURS = {"Grid": "#0072B2", "Mini-grid": "#009E73", "Stand-alone": "#
 
 # Demand cases: (demand_case, study name, description, line colour), display order.
 DEMAND_CASES = [
-    ("TD_Low_minus", "U3R1", "Top-down low, lower variant (urban tier 3, rural tier 1)", "#9ECAE1"),
-    ("TD_Low", "U3R2", "Top-down low (urban tier 3, rural tier 2)", "#4292C6"),
-    ("TD_High", "U4R3", "Top-down high (urban tier 4, rural tier 3)", "#08519C"),
-    ("TD_High_plus", "U5R3", "Top-down high, higher variant (urban tier 5, rural tier 3)", "#08306B"),
+    ("TD_Low_minus", "U3R1", "Top-down low (urban tier 3, rural tier 1)", "#9ECAE1"),
+    ("TD_Low", "U3R2", "Top-down low, higher rural tier (urban tier 3, rural tier 2)", "#4292C6"),
+    ("TD_High_minus", "U4R2", "Top-down high (urban tier 4, rural tier 2)", "#2171B5"),
+    ("TD_High", "U4R3", "Top-down high, higher rural tier (urban tier 4, rural tier 3)", "#08519C"),
+    ("TD_High_plus", "U5R3", "Top-down high, higher urban tier (urban tier 5, rural tier 3)", "#08306B"),
     ("BU", "BU", "Bottom-up demand from GDP-PPP and poverty (custom tier)", "#D55E00"),
 ]
 CASE_ORDER = [c[0] for c in DEMAND_CASES]
+KEY_CASES = ["TD_Low_minus", "TD_High_minus", "BU"]      # the three scenarios agreed with the team (U3R1, U4R2, BU)
+DRE_CODES = [3, 5, 7]                                     # decentralised renewable energy technologies
 CASE_STUDY_NAME = {c[0]: c[1] for c in DEMAND_CASES}
 CASE_DESCRIPTION = {c[0]: c[2] for c in DEMAND_CASES}
 CASE_COLOUR = {c[0]: c[3] for c in DEMAND_CASES}
@@ -36,8 +39,8 @@ CASE_COLOUR = {c[0]: c[3] for c in DEMAND_CASES}
 COST_LEVELS = [0.047, 0.078, 0.1, 0.22]
 REFERENCE_COST = 0.1
 COST_ROLE = {0.047: "legacy", 0.078: "low variant", 0.1: "reference", 0.22: "high variant"}
-SENSITIVITY_CASES = ["TD_Low", "TD_High", "BU"]
-DEMAND_VARIANTS = [("TD_Low_minus", "TD_Low"), ("TD_High_plus", "TD_High")]   # (variant, base)
+SENSITIVITY_CASES = ["TD_Low_minus", "TD_High_minus", "BU"]       # the key cases carry the cost sweep and the variants
+DEMAND_VARIANTS = [("TD_Low", "TD_Low_minus"), ("TD_High", "TD_High_minus"), ("TD_High_plus", "TD_High")]   # (variant, base)
 YEARS = (2030, 2040)
 START_YEAR = 2025
 

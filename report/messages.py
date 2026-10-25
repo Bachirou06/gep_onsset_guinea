@@ -101,19 +101,26 @@ def km_unserved_2030(headlines: dict) -> dict:
             "source": "Table 7.1"}
 
 
-def km_tech_mix(headlines: dict) -> dict:
-    lo_case = "TD_Low" if "TD_Low" in headlines else CASE_ORDER[0]
-    hi_case = "TD_High" if "TD_High" in headlines else CASE_ORDER[-1]
-    lo, hi = headlines[lo_case], headlines[hi_case]
-    g_lo, g_hi = _minmax(headlines, "grid_share_2040")
+def km_tech_mix(headlines: dict, key_cases=None) -> dict:
+    """Technology mix of the key scenarios on two bases: share of the new connections 2025 to
+    2040 (where the decentralised impact shows) and share of the 2040 population, which
+    includes the people already on the grid."""
+    from report.constants import KEY_CASES, TECH_LABEL
+    cases = [c for c in (key_cases or KEY_CASES) if c in headlines] or list(headlines)[:3]
+    parts = []
+    for c in cases:
+        h = headlines[c]
+        nc = h["new_connections_by_tech"]
+        nc_t = sum(nc.values())
+        dre_detail = ", ".join(f"{TECH_LABEL[k].lower()} {fmt_pct(nc[k] / nc_t)}" for k in (3, 5, 7) if nc_t and nc[k] > 0)
+        parts.append(f"{name(c)}: decentralised systems take {fmt_pct(h['dre_share_new_connections'])} of the "
+                     f"{fmt_people(nc_t)} new connections ({dre_detail}), grid extension "
+                     f"{fmt_pct(h['grid_ext_share_new_connections'])}; counting the people already on the grid, "
+                     f"decentralised systems serve {fmt_pct(h['dre_share_pop_2040'])} of the 2040 population and the grid "
+                     f"{fmt_pct(h['grid_share_2040'])}")
     return {"id": "km-mix",
-            "text": (f"The grid serves {fmt_pct(g_lo[1])} ({name(g_lo[0])}) to {fmt_pct(g_hi[1])} ({name(g_hi[0])}) "
-                     f"of the 2040 population. Under low demand ({name(lo_case)}) stand-alone PV is the main "
-                     f"off-grid option with {fmt_people(lo['sa_pv_people_2040'])} people against "
-                     f"{fmt_people(lo['mg_pv_people_2040'])} on mini-grid PV; under high demand ({name(hi_case)}) "
-                     f"mini-grid PV takes the lead with {fmt_people(hi['mg_pv_people_2040'])} people against "
-                     f"{fmt_people(hi['sa_pv_people_2040'])}."),
-            "source": "Figures 4.1 and 4.5, Table 5.4"}
+            "text": ("Technology mix of the key scenarios, on two bases. " + "; ".join(parts) + "."),
+            "source": "Tables 4.1 and 4.1b, Figures 4.1 and 4.2"}
 
 
 def km_cost_per_connection(headlines: dict) -> dict:

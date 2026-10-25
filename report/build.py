@@ -19,8 +19,8 @@ from report import maps as MP
 from report import messages as MS
 from report import metrics as M
 from report.constants import (CASE_DESCRIPTION, CASE_ORDER, CASE_STUDY_NAME, CHAPTERS, COST_LEVELS, COST_ROLE,
-                              DEMAND_VARIANTS, NOT_ASSIGNED, REFERENCE_COST, SENSITIVITY_CASES, SERVED_CODES,
-                              TECH, TECH_LABEL, TECH_ORDER)
+                              DEMAND_VARIANTS, KEY_CASES, NOT_ASSIGNED, REFERENCE_COST, SENSITIVITY_CASES, SERVED_CODES,
+                              TECH, TECH_KEY, TECH_LABEL, TECH_ORDER)
 from report.data import check_consistency, load_batch
 from report.render import render, table_html
 
@@ -142,7 +142,9 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
 
     # --- key messages ---------------------------------------------------------
     key_messages = MS.key_messages(H, sens, deltas, HY, vc if len(vc) else None)
-    kpis = [{"study_name": CASE_STUDY_NAME.get(s.demand_case, s.demand_case), "description": CASE_DESCRIPTION.get(s.demand_case, ""),
+    kpis = [{"study_name": CASE_STUDY_NAME.get(s.demand_case, s.demand_case) + (" (key scenario)" if s.demand_case in KEY_CASES else ""),
+             "description": CASE_DESCRIPTION.get(s.demand_case, ""),
+             "dre_new": MS.fmt_pct(H[s.demand_case]["dre_share_new_connections"]),
              "people": MS.fmt_people(H[s.demand_case]["people_reached_cum"]),
              "investment": MS.fmt_musd(H[s.demand_case]["investment_musd_cum"]),
              "usd_per_connection": MS.fmt_usd(H[s.demand_case]["usd_per_new_connection"]),
@@ -210,14 +212,26 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                           caption="Table 3.2. Settlements that no scenario connects to the grid by 2040, by region",
                           col_labels={"settlements": "Settlements", "people_2040": "People 2040", "people_start": "People 2025"},
                           index_label="Region", total_rows=["Total"])
-    hl = pd.DataFrame({CASE_STUDY_NAME.get(c, c): H[c] for c in H}).T
+    hl = pd.DataFrame({CASE_STUDY_NAME.get(c, c): {k: v for k, v in H[c].items() if not isinstance(v, dict)} for c in H}).T
     hl_cols = ["population_2040", "people_reached_cum", "investment_musd_cum", "capacity_mw_cum", "usd_per_new_connection",
-               "people_per_musd", "lcoe_energy_w", "lcoe_energy_w_excl_dens", "grid_share_2040"]
+               "people_per_musd", "lcoe_energy_w", "lcoe_energy_w_excl_dens", "grid_share_2040", "dre_share_new_connections",
+               "dre_share_pop_2040"]
     T["t41"] = table_html(hl[hl_cols], {"population_2040": F_INT, "people_reached_cum": F_INT, "investment_musd_cum": F_1,
                                         "capacity_mw_cum": F_1, "usd_per_new_connection": F_INT, "people_per_musd": F_INT,
-                                        "lcoe_energy_w": F_LCOE, "lcoe_energy_w_excl_dens": F_LCOE, "grid_share_2040": F_PCT},
-                          caption=f"Table 4.1. Headline results per demand case at {REFERENCE_COST} USD/kWh",
-                          col_labels=METRIC_LABELS, index_label="Demand case")
+                                        "lcoe_energy_w": F_LCOE, "lcoe_energy_w_excl_dens": F_LCOE, "grid_share_2040": F_PCT,
+                                        "dre_share_new_connections": F_PCT, "dre_share_pop_2040": F_PCT},
+                          caption=f"Table 4.1. Headline results per demand case at {REFERENCE_COST} USD/kWh (key scenarios: "
+                                  f"{', '.join(CASE_STUDY_NAME.get(k, k) for k in KEY_CASES if k in H)})",
+                          col_labels={**METRIC_LABELS, "dre_share_new_connections": "Decentralised share of new connections",
+                                      "dre_share_pop_2040": "Decentralised share of 2040 population"}, index_label="Demand case")
+    mix = M.mix_table({s.demand_case: s.settlements for s in refs})
+    mix.index = pd.MultiIndex.from_tuples([(CASE_STUDY_NAME.get(c, c), "New connections 2025 to 2040" if b == "new_connections"
+                                            else "Population 2040 (incl. already on the grid)") for c, b in mix.index],
+                                          names=["Demand case", "Basis"])
+    T["t41b"] = table_html(mix, {**{c: F_PCT for c in mix.columns if c != "total"}, "total": F_INT},
+                           caption="Table 4.1b. Technology mix per demand case on two bases: share of the new connections (where the "
+                                   "decentralised impact shows) and share of the 2040 population, which includes the people already on the grid",
+                           col_labels={"total": "Total (people)"}, index_label="Demand case / basis")
     reg_pop = pd.DataFrame({CASE_STUDY_NAME.get(c, c): REG[c]["grid_share"] for c in REG})
     reg_pop.insert(0, "Population 2040", REG[primary.demand_case]["population"])
     T["t42"] = table_html(reg_pop.sort_values("Population 2040", ascending=False),
@@ -437,12 +451,25 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     figs["ch9"].append({"id": "fig-9-4", "num": "9.4", "div": F.fig_to_div(F.shares_vs_cost(sh_long, cases_present, "Technology shares of the 2040 population against the grid cost"), "fig-9-4"),
                         "caption": "Shares of the 2040 population by least-cost technology at each grid generation cost, per demand case.",
                         "source": f"FinalElecCode2040 and Pop2040 of the {len(sh_long['demand_case'].unique()) * len(COST_LEVELS)} sensitivity Results files"})
-    if len(flows_bu):
-        figs["ch9"].append({"id": "fig-9-5", "num": "9.5", "div": F.fig_to_div(F.switch_matrix(flows_bu, f"Technology switches, BU at {REFERENCE_COST} against {max(bu)} USD/kWh"), "fig-9-5"),
-                            "caption": f"People moving between technologies when the grid cost rises from {REFERENCE_COST} to {max(bu)} USD/kWh, bottom-up case ({totals_bu['settlements']:,} settlements, {MS.fmt_people(totals_bu['people'])} people).",
-                            "source": f"BU_g{REFERENCE_COST} and BU_g{max(bu)} Results files joined on id"})
-    else:
-        figs["ch9"].append({"id": "fig-9-5", "num": "9.5", "div": "<p class='note'>No alternative cost run for the bottom-up case.</p>", "caption": "Not available.", "source": ""})
+    # switch heat maps at the highest grid cost for every key case that has it
+    hi_cost_all = max(cost_levels)
+    n_sw = 0
+    for case in [c for c in SENSITIVITY_CASES if c in ref_by_case]:
+        by_cost = batch.by_case(case)
+        if hi_cost_all not in by_cost or REFERENCE_COST not in by_cost:
+            continue
+        fl, tot = M.switches(by_cost[REFERENCE_COST].settlements, by_cost[hi_cost_all].settlements)
+        if not len(fl):
+            continue
+        fid = "fig-9-5" if n_sw == 0 else f"fig-9-5{'bcd'[n_sw - 1]}"
+        figs["ch9"].append({"id": fid, "num": "9.5" if n_sw == 0 else f"9.5{'bcd'[n_sw - 1]}",
+                            "div": F.fig_to_div(F.switch_matrix(fl, f"Technology switches, {CASE_STUDY_NAME.get(case)} at {REFERENCE_COST} against {hi_cost_all} USD/kWh"), fid),
+                            "caption": f"People moving between technologies when the grid cost rises from {REFERENCE_COST} to {hi_cost_all} USD/kWh, "
+                                       f"{CASE_STUDY_NAME.get(case)} case ({tot['settlements']:,} settlements, {MS.fmt_people(tot['people'])} people).",
+                            "source": f"{by_cost[REFERENCE_COST].scenario_id} and {by_cost[hi_cost_all].scenario_id} Results files joined on id"})
+        n_sw += 1
+    if n_sw == 0:
+        figs["ch9"].append({"id": "fig-9-5", "num": "9.5", "div": "<p class='note'>No high grid-cost run for the key cases.</p>", "caption": "Not available.", "source": ""})
     for i, (variant, d) in enumerate(deltas_df.items()):
         base = dict(DEMAND_VARIANTS)[variant]
         fid = "fig-9-7" if i == 0 else f"fig-9-7{'b' if i == 1 else i}"
@@ -451,6 +478,37 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                              "source": "Table 9.3"})
     if not figs["ch9b"]:
         figs["ch9b"].append({"id": "fig-9-7", "num": "9.7", "div": "<p class='note'>No demand variant in the batch.</p>", "caption": "Not available.", "source": ""})
+    # grid cost bins for the bottom-up case: heat maps of the distribution
+    figs["bins"] = []
+    bins_case = "BU" if "BU" in ref_by_case else SENSITIVITY_CASES[0]
+    bins_costs = sorted(batch.by_case(bins_case))
+    bins_ok = len(bins_costs) >= 5
+    if bins_ok:
+        bt = M.cost_bin_table(batch, bins_case)
+        tech_pop = bt[[f"pop_share_{TECH_KEY[c]}" for c in SERVED_CODES]].T
+        tech_pop.index = [TECH_LABEL[c] for c in SERVED_CODES]
+        tech_nc = bt[[f"nc_share_{TECH_KEY[c]}" for c in SERVED_CODES]].T
+        tech_nc.index = [TECH_LABEL[c] for c in SERVED_CODES]
+        reg = M.cost_bin_region_table(batch, bins_case)
+        nm = CASE_STUDY_NAME.get(bins_case, bins_case)
+        for fid, num, z, title, cap in (("fig-9-9", "9.9", tech_pop, f"Share of the 2040 population by technology and grid cost, {nm} case",
+                                         "Share of the 2040 population served by each technology at each grid generation cost level; people already on the grid count under grid densification."),
+                                        ("fig-9-9b", "9.9b", tech_nc, f"Share of new connections 2025 to 2040 by technology and grid cost, {nm} case",
+                                         "Share of the people newly connected over 2025 to 2040 by each technology at each grid cost level, where the decentralised impact shows."),
+                                        ("fig-9-10", "9.10", reg, f"Grid share of the 2040 population by region and grid cost, {nm} case",
+                                         "Share of each region's 2040 population served by the grid (densification and extension) at each grid cost level.")):
+            figs["bins"].append({"id": fid, "num": num, "div": F.fig_to_div(F.heatmap(z, title, "Grid cost (USD/kWh)", "", ".0%", colorbar_title="share"), fid),
+                                 "caption": cap, "source": f"{', '.join(bt['scenario_id'])} Results files; batch {batch.name}"})
+        bt_show = bt[["investment_musd_cum", "capacity_mw_cum", "grid_ext_settlements_2040", "grid_ext_people_2040", "dre_share_new_connections",
+                      "usd_per_new_connection", "lcoe_energy_w_excl_dens"]].copy()
+        bt_show.index = [f"{c}" for c in bt_show.index]
+        T["t95"] = table_html(bt_show, {"investment_musd_cum": F_1, "capacity_mw_cum": F_1, "grid_ext_settlements_2040": F_INT, "grid_ext_people_2040": F_INT,
+                                        "dre_share_new_connections": F_PCT, "usd_per_new_connection": F_INT, "lcoe_energy_w_excl_dens": F_LCOE},
+                              caption=f"Table 9.5. Headline metrics of the {nm} case at each grid generation cost level (USD/kWh)",
+                              col_labels={**METRIC_LABELS, "grid_ext_settlements_2040": "Grid-extension settlements 2040", "grid_ext_people_2040": "People on grid extension 2040",
+                                          "dre_share_new_connections": "Decentralised share of new connections"}, index_label="Grid cost (USD/kWh)")
+    else:
+        T["t95"] = ""
     figs["ch9c"] = []
     vlabels = {**METRIC_LABELS, "grid_ext_people_2040": "People on grid extension 2040", "mg_pv_people_2040": "People on mini-grid PV 2040",
                "sa_pv_people_2040": "People on stand-alone PV 2040", "unserved_2030": "People not yet electrified 2030"}
@@ -606,7 +664,12 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                "rules": rules, "caveats": caveats, "maps": maps_ctx, "n_settlements": f"{n_settlements:,}", "reference_cost": REFERENCE_COST,
                "figs": figs, "corridor": corridor, "corridor_text": corridor_text, "corridor_note": corridor_note,
                "model_says": model_says, "model_does_not_say": model_does_not_say, "summaries": summaries, "method_notes": method_notes,
-               "variant_names": variant_names, "variant_labels": VARIANT_LABELS,
+               "variant_names": variant_names, "variant_labels": VARIANT_LABELS, "bins_ok": bins_ok,
+               "bins_text": (f"The {CASE_STUDY_NAME.get(bins_case, bins_case)} case is run at {len(bins_costs)} grid generation cost levels "
+                             f"({', '.join(str(c) for c in bins_costs)} USD/kWh). The heat maps show how the technology mix moves with the cost of "
+                             f"grid electricity, on the two bases of chapter 4: the 2040 population, where the people already on the grid dominate, and the "
+                             f"new connections of 2025 to 2040, where the decentralised impact shows; Figure 9.10 gives the regional picture and Table 9.5 the "
+                             f"headline metrics per level.") if bins_ok else "",
                "variants_text": (f"Two supply-side variants are run for the Table 1 cases at the reference grid cost: full grid expansion "
                                  f"(the {cap_conn:,},000 connections and {cap_mw} MW per year caps to {yr_mid} removed) and, on top of it, "
                                  f"mini-grid PV panels 25 percent cheaper (factor 0.75 on the panel cost of the PV-battery mini-grid; battery and "

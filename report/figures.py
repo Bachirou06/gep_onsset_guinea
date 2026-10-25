@@ -68,7 +68,8 @@ def lines_vs_cost(sens_df: pd.DataFrame, y_col: str, y_title: str, cases=SENSITI
     fig.add_vline(x=REFERENCE_COST, line=dict(color="#888888", dash="dash", width=1.2))
     fig.add_annotation(x=REFERENCE_COST, y=1.02, yref="paper", text="reference", showarrow=False,
                        font=dict(size=11, color="#666666"), xanchor="left")
-    fig.update_xaxes(title_text="Grid generation cost (USD/kWh)", tickvals=COST_LEVELS, tickformat=".3f")
+    ticks = sorted(set(sens_df.loc[sens_df["demand_case"].isin(cases), "grid_cost"].tolist()) or COST_LEVELS)
+    fig.update_xaxes(title_text="Grid generation cost (USD/kWh)", tickvals=ticks, tickformat=".3f", tickangle=-45)
     fig.update_yaxes(title_text=y_title, tickformat=",.0f" if "USD/kWh" not in y_title else ".3f", rangemode="tozero")
     return _apply(fig, title or y_title, height=440)
 
@@ -141,6 +142,20 @@ def delta_bars(delta_df: pd.DataFrame, title: str, label_map: dict | None = None
                            hovertemplate="%{x}: %{y:+.1f}%<extra></extra>"))
     fig.update_yaxes(title_text="Change against the base case (%)", zeroline=True)
     return _apply(fig, title, height=420)
+
+
+def heatmap(z: pd.DataFrame, title: str, x_title: str = "", y_title: str = "", fmt: str = ".0%",
+            colorscale: str = "Blues", zmin=None, zmax=None, colorbar_title: str = "") -> go.Figure:
+    """Annotated heat map of a frame (rows = y labels, columns = x labels)."""
+    x = [str(c) for c in z.columns]
+    y = [str(i) for i in z.index]
+    text = [[format(v, fmt) if pd.notna(v) else "" for v in row] for row in z.to_numpy()]
+    fig = go.Figure(go.Heatmap(z=z.to_numpy(), x=x, y=y, text=text, texttemplate="%{text}", colorscale=colorscale,
+                               zmin=zmin, zmax=zmax, colorbar=dict(title=colorbar_title, tickformat=fmt),
+                               hovertemplate=f"%{{y}}<br>{x_title}: %{{x}}<br>%{{text}}<extra></extra>"))
+    fig.update_xaxes(title_text=x_title, type="category")
+    fig.update_yaxes(title_text=y_title, type="category", autorange="reversed")
+    return _apply(fig, title, height=max(360, 60 + 44 * len(y)))
 
 
 def delta_bars_by_case(df: pd.DataFrame, title: str, label_map: dict | None = None, metrics: list | None = None) -> go.Figure:

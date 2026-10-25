@@ -23,10 +23,21 @@ VARIANT_IDS = ["TD_Low_optgrid_g0.1", "TD_Low_optgrid_optmg_g0.1", "TD_High_optg
                "BU_optgrid_g0.1", "BU_optgrid_optmg_g0.1"]
 
 
+KEY_IDS = ["TD_High_minus_g0.1", "TD_High_minus_g0.047", "TD_High_minus_g0.078", "TD_High_minus_g0.22",
+           "TD_High_minus_optgrid_g0.1", "TD_High_minus_optgrid_optmg_g0.1", "TD_Low_minus_g0.047", "TD_Low_minus_g0.078",
+           "TD_Low_minus_g0.22", "TD_Low_minus_optgrid_g0.1", "TD_Low_minus_optgrid_optmg_g0.1"]
+
+
 def test_study_file_loads_fourteen_in_order_then_the_supply_variants(sc):
     c = sc.load_control(STUDY, check_paths=False)
     assert c.ids()[:14] == EXPECTED_ORDER
-    assert c.ids()[14:] == VARIANT_IDS
+    assert c.ids()[14:20] == VARIANT_IDS
+    assert set(c.ids()[20:]) >= set(KEY_IDS)
+    assert {f"BU_g{b}" for b in (0.06, 0.12, 0.14, 0.16, 0.18, 0.2, 0.25)} <= set(c.ids())
+    p = c.resolved("TD_High_minus_g0.1")
+    assert (p["urban_target_tier"], p["rural_target_tier"], p["grid_generation_cost"]) == (4, 2, 0.1)
+    assert c.resolved("TD_High_minus_g0.22")["grid_generation_cost"] == 0.22
+    assert c.resolved("TD_Low_minus_optgrid_optmg_g0.1")["mg_pv_hybrid_cost_factor"] == 0.75
     for sid in VARIANT_IDS:
         s = c.scenario(sid)
         p = c.resolved(sid)

@@ -47,6 +47,7 @@
   <div class="kpi"><div class="case">{{ k.study_name | e }}</div><div class="desc">{{ k.description | e }}</div>
   <div class="val">People reached 2025 to 2040<br><b>{{ k.people }}</b></div>
   <div class="val">Cumulative investment<br><b>{{ k.investment }}</b></div>
+  <div class="val">Decentralised share of new connections<br><b>{{ k.dre_new }}</b></div>
   <div class="val">Per newly connected person<br><b>{{ k.usd_per_connection }}</b></div>
   <div class="val">Delivered LCOE 2040, all settlements<br><b>{{ k.lcoe }}</b></div>
   <div class="val">Delivered LCOE 2040, newly electrified<br><b>{{ k.lcoe_new }}</b></div></div>
@@ -96,6 +97,7 @@
 <figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
 {% endfor %}
 <div class="table-wrap">{{ tables.t41 }}</div>
+<div class="table-wrap">{{ tables.t41b }}</div>
 {% for m in maps.ch4 %}
 <figure id="{{ m.id }}"><img src="{{ m.uri }}" alt="{{ m.alt | e }}"><figcaption><b>Figure {{ m.num }}.</b> {{ m.caption | e }}</figcaption><p class="source">Source: {{ m.source | e }}</p></figure>
 {% endfor %}
@@ -171,6 +173,16 @@
 {% for f in figs.ch9b %}
 <figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
 {% endfor %}
+<h3 id="cost-bins">Grid cost bins: how the mix moves with the cost of grid electricity</h3>
+{% if bins_ok %}
+<p>{{ bins_text | e }}</p>
+{% for f in figs.bins %}
+<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
+{% endfor %}
+<div class="table-wrap">{{ tables.t95 }}</div>
+{% else %}
+<p class="note">The bottom-up case was run at fewer than five grid cost levels in this batch, so the heat maps are omitted.</p>
+{% endif %}
 <h3 id="supply-variants">Supply-side variants: optimistic grid expansion and mini-grid PV cost</h3>
 {% if variant_names %}
 <p>{{ variants_text | e }}</p>
