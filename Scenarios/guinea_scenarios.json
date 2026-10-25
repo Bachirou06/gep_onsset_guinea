@@ -13,7 +13,8 @@
       "Recorded-only keys. existing_grid_cost_ratio, mv_increase_rate and max_mv_line_dist are written to the Variables file for documentation but never reach the model calls, exactly as in the notebook; prioritization must be 5 because the notebook hard-codes 5 in its model calls.",
       "Supply-side variants (2026-10-25). optgrid removes the 127,000 connections and 90 MW per year caps to 2030 (full grid expansion); optgrid_optmg adds mg_pv_hybrid_cost_factor 0.75 (PV panels of the PV-battery mini-grid 25 percent cheaper, battery and inverter unchanged). Run for the three Table 1 cases at the reference cost.",
       "Key scenarios agreed with the team (2026-10-25): U3R1 (TD_Low_minus), U4R2 (TD_High_minus, urban tier 4, rural tier 2) and BU; they carry the full cost sweep and both supply-side variants.",
-      "Grid cost bins (2026-10-25): the bottom-up case is also run at 0.06, 0.12, 0.14, 0.16, 0.18, 0.20 and 0.25 USD/kWh to map how the technology mix moves with the grid generation cost (heat maps in the sensitivity chapter)."
+      "Grid cost bins (2026-10-25): the bottom-up case is also run at 0.06, 0.12, 0.14, 0.16, 0.18, 0.20 and 0.25 USD/kWh to map how the technology mix moves with the grid generation cost (heat maps in the sensitivity chapter).",
+      "Final scenario set (2026-10-25, team decision): the three key cases at three grid generation cost regimes, 0.22 USD/kWh unsubsidised (Mission 300 compact), 0.085 USD/kWh subsidised with hydro-dominant supply, 0.1 USD/kWh subsidised; supply-side sensitivity (optgrid, optgrid_optmg) at every regime. The earlier sweep and bins stay for the sensitivity chapter."
     ],
     "input_file_confirmed": "OnSSET_InputFile_20261018_100416.csv confirmed by the colleague on 2026-10-24 as the extraction to use (post extraction fix of commit fff30bd).",
     "superseded_runs": {
@@ -524,6 +525,198 @@
         "urban_target_tier": 6,
         "rural_target_tier": 6,
         "grid_generation_cost": 0.25
+      }
+    },
+    {
+      "id": "TD_Low_minus_g0.085",
+      "demand_case": "TD_Low_minus",
+      "label": "Top-down low demand (urban tier 3, rural tier 1), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 1,
+        "grid_generation_cost": 0.085
+      }
+    },
+    {
+      "id": "TD_Low_minus_optgrid_g0.22",
+      "demand_case": "TD_Low_minus",
+      "variant": "optgrid",
+      "label": "Top-down low demand (urban tier 3, rural tier 1), grid cost unsubsidised (Mission 300 compact) 0.22 USD/kWh, optimistic grid expansion",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 1,
+        "grid_generation_cost": 0.22,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "TD_Low_minus_optgrid_optmg_g0.22",
+      "demand_case": "TD_Low_minus",
+      "variant": "optgrid_optmg",
+      "label": "Top-down low demand (urban tier 3, rural tier 1), grid cost unsubsidised (Mission 300 compact) 0.22 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 1,
+        "grid_generation_cost": 0.22,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
+      }
+    },
+    {
+      "id": "TD_Low_minus_optgrid_g0.085",
+      "demand_case": "TD_Low_minus",
+      "variant": "optgrid",
+      "label": "Top-down low demand (urban tier 3, rural tier 1), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh, optimistic grid expansion",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 1,
+        "grid_generation_cost": 0.085,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "TD_Low_minus_optgrid_optmg_g0.085",
+      "demand_case": "TD_Low_minus",
+      "variant": "optgrid_optmg",
+      "label": "Top-down low demand (urban tier 3, rural tier 1), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 3,
+        "rural_target_tier": 1,
+        "grid_generation_cost": 0.085,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
+      }
+    },
+    {
+      "id": "TD_High_minus_g0.085",
+      "demand_case": "TD_High_minus",
+      "label": "Top-down high demand (urban tier 4, rural tier 2), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.085
+      }
+    },
+    {
+      "id": "TD_High_minus_optgrid_g0.22",
+      "demand_case": "TD_High_minus",
+      "variant": "optgrid",
+      "label": "Top-down high demand (urban tier 4, rural tier 2), grid cost unsubsidised (Mission 300 compact) 0.22 USD/kWh, optimistic grid expansion",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.22,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "TD_High_minus_optgrid_optmg_g0.22",
+      "demand_case": "TD_High_minus",
+      "variant": "optgrid_optmg",
+      "label": "Top-down high demand (urban tier 4, rural tier 2), grid cost unsubsidised (Mission 300 compact) 0.22 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.22,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
+      }
+    },
+    {
+      "id": "TD_High_minus_optgrid_g0.085",
+      "demand_case": "TD_High_minus",
+      "variant": "optgrid",
+      "label": "Top-down high demand (urban tier 4, rural tier 2), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh, optimistic grid expansion",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.085,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "TD_High_minus_optgrid_optmg_g0.085",
+      "demand_case": "TD_High_minus",
+      "variant": "optgrid_optmg",
+      "label": "Top-down high demand (urban tier 4, rural tier 2), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 4,
+        "rural_target_tier": 2,
+        "grid_generation_cost": 0.085,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
+      }
+    },
+    {
+      "id": "BU_g0.085",
+      "demand_case": "BU",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.085
+      }
+    },
+    {
+      "id": "BU_optgrid_g0.22",
+      "demand_case": "BU",
+      "variant": "optgrid",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost unsubsidised (Mission 300 compact) 0.22 USD/kWh, optimistic grid expansion",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.22,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "BU_optgrid_optmg_g0.22",
+      "demand_case": "BU",
+      "variant": "optgrid_optmg",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost unsubsidised (Mission 300 compact) 0.22 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.22,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
+      }
+    },
+    {
+      "id": "BU_optgrid_g0.085",
+      "demand_case": "BU",
+      "variant": "optgrid",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh, optimistic grid expansion",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.085,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999
+      }
+    },
+    {
+      "id": "BU_optgrid_optmg_g0.085",
+      "demand_case": "BU",
+      "variant": "optgrid_optmg",
+      "label": "Bottom-up demand from GDP-PPP and poverty (custom tier), grid cost subsidised, hydro-dominant supply 0.085 USD/kWh, optimistic grid expansion and mini-grid PV panels 25 percent cheaper",
+      "overrides": {
+        "urban_target_tier": 6,
+        "rural_target_tier": 6,
+        "grid_generation_cost": 0.085,
+        "annual_new_grid_connections_limit_intermediate": 999999999,
+        "annual_grid_cap_gen_limit_intermediate": 999999999,
+        "mg_pv_hybrid_cost_factor": 0.75
       }
     }
   ]
