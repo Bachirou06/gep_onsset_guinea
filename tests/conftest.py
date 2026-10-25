@@ -86,3 +86,57 @@ def shared_batch(shared_control):
 def small_control(gep_path, repo_root, sample_calibrated, profiles, tmp_path):
     from tests.helpers import make_control
     return make_control(repo_root, tmp_path, sample_calibrated, ["BU_g0.1"])
+
+
+# --- results report: a 500-settlement sample of a finished batch ------------------
+REPORT_BATCH_ENV = "GUINEA_REPORT_BATCH"
+DEFAULT_REPORT_BATCH = "GuineaRuns/Outputs/2026-10-25_table1"
+
+
+@pytest.fixture(scope="session")
+def report_batch_dir(repo_root) -> Path:
+    """The real finished batch the report tests sample from; skipped when absent."""
+    import os
+    p = Path(os.environ.get(REPORT_BATCH_ENV, str(repo_root / DEFAULT_REPORT_BATCH)))
+    if not (p / "comparison_summary.csv").exists():
+        pytest.skip(f"finished batch not available: {p}")
+    return p
+
+
+@pytest.fixture(scope="session")
+def report_sample_batch(repo_root, report_batch_dir) -> Path:
+    """A copy of the batch restricted to 500 settlement ids (seed 42) and the columns the
+    report reads; manifests, Summaries, comparison and logs copied verbatim. Built once,
+    cached under tests/_cache/report_sample_500/<batch name>/."""
+    import json
+    import shutil
+    import pandas as pd
+    from report.constants import RESULT_COLUMNS
+    out = CACHE / "report_sample_500" / report_batch_dir.name
+    marker = out / ".complete"
+    if marker.exists():
+        return out
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    folders = sorted(d for d in report_batch_dir.iterdir()
+                     if d.is_dir() and (d / "manifest.json").exists())
+    ids = None
+    for d in folders:
+        m = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+        if m.get("status") != "complete":
+            continue
+        sid = d.name
+        df = pd.read_csv(d / f"{sid}_Results.csv", usecols=RESULT_COLUMNS)
+        if ids is None:
+            ids = df["id"].sample(n=SAMPLE_ROWS, random_state=SEED).sort_values().to_numpy()
+        (out / sid).mkdir()
+        df[df["id"].isin(ids)].to_csv(out / sid / f"{sid}_Results.csv", index=False)
+        for name in ("manifest.json", f"{sid}_Summaries.csv", f"{sid}_Variables.csv"):
+            if (d / name).exists():
+                shutil.copy2(d / name, out / sid / name)
+    for name in ("comparison_summary.csv", "batch_log.txt", "CHECKS.md"):
+        if (report_batch_dir / name).exists():
+            shutil.copy2(report_batch_dir / name, out / name)
+    marker.write_text("ok")
+    return out

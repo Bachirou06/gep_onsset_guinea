@@ -13,3 +13,9 @@ dependencies:
   - ipykernel
   - jupyter
   - nbformat
+  # results report (report/ package)
+  - plotly
+  - geopandas
+  - pyarrow
+  - jinja2
+  - pillow
