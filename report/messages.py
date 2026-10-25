@@ -249,7 +249,30 @@ def km_hydro(hydro: dict, case: str = "BU") -> dict:
             "source": "Table 6.1"}
 
 
-def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict) -> list:
+VARIANT_WORDS = {"optgrid": "removing the grid connection and capacity caps to 2030",
+                 "optgrid_optmg": "removing the grid caps and cutting the mini-grid PV panel cost by a quarter"}
+
+
+def km_supply_variants(vc: pd.DataFrame, case: str = "BU") -> dict:
+    """What the supply-side variants change for one demand case, computed from variant_comparison."""
+    sub = vc[vc["demand_case"] == case]
+    if sub.empty:
+        case = vc["demand_case"].iloc[0]
+        sub = vc[vc["demand_case"] == case]
+    parts = []
+    for variant, g in sub.groupby("variant", sort=False):
+        d = g.set_index("metric")
+        inv = _check(d.loc["investment_musd_cum", "delta_pct"], "investment delta")
+        grid = _check(d.loc["grid_share_2040", "delta_abs"], "grid share delta") * 100
+        mg = _check(d.loc["mg_pv_people_2040", "delta_abs"], "mini-grid people delta")
+        parts.append(f"{VARIANT_WORDS.get(variant, variant)} {direction(inv / 100, 'raises', 'lowers')} total investment by "
+                     f"{abs(inv):.0f}%, {direction(grid / 100, 'raises', 'lowers')} the grid share of the 2040 population by "
+                     f"{abs(grid):.0f} points and {direction(mg / 1e5, 'adds', 'removes', 'leaves unchanged')} "
+                     f"{fmt_people(abs(mg))} people on mini-grid PV")
+    return {"id": "km-supply", "text": f"In the {name(case)} case, {'; '.join(parts)}.", "source": "Table 9.4"}
+
+
+def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict, variants: pd.DataFrame = None) -> list:
     msgs = [km_investment_range(headlines), km_tech_mix(headlines), km_cost_per_connection(headlines),
             km_people_per_musd(headlines), km_lcoe(headlines), km_newly_electrified_lcoe(headlines),
             km_unserved_2030(headlines)]
@@ -262,6 +285,8 @@ def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict)
         msgs.append(km_demand_sensitivity(deltas, sens))
     if hydro:
         msgs.append(km_hydro(hydro))
+    if variants is not None and len(variants):
+        msgs.append(km_supply_variants(variants))
     for m in msgs:
         if "nan" in m["text"].lower().split():
             raise ValueError(f"message {m['id']} contains nan")

@@ -171,6 +171,17 @@
 {% for f in figs.ch9b %}
 <figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
 {% endfor %}
+<h3 id="supply-variants">Supply-side variants: optimistic grid expansion and mini-grid PV cost</h3>
+{% if variant_names %}
+<p>{{ variants_text | e }}</p>
+<div class="table-wrap">{{ tables.t94 }}</div>
+{% for f in figs.ch9c %}
+<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
+{% endfor %}
+{% if maps.map97 %}<figure id="map-9-7"><img src="{{ maps.map97.uri }}" alt="{{ maps.map97.alt | e }}"><figcaption><b>Figure {{ maps.map97.num }}.</b> {{ maps.map97.caption | e }}</figcaption><p class="source">Source: {{ maps.map97.source | e }}</p></figure>{% endif %}
+{% else %}
+<p class="note">No supply-side variant was run in this batch.</p>
+{% endif %}
 </section>
 
 {# ---------------------------------------------------------------- 10 #}

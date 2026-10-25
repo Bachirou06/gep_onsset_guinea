@@ -143,6 +143,21 @@ def delta_bars(delta_df: pd.DataFrame, title: str, label_map: dict | None = None
     return _apply(fig, title, height=420)
 
 
+def delta_bars_by_case(df: pd.DataFrame, title: str, label_map: dict | None = None, metrics: list | None = None) -> go.Figure:
+    """Percent change per metric (x) with one bar per demand case; df columns demand_case, metric, delta_pct."""
+    metrics = metrics or list(dict.fromkeys(df["metric"]))
+    labels = [(label_map or {}).get(m, m) for m in metrics]
+    fig = go.Figure()
+    for case in [c for c in CASE_COLOUR if (df["demand_case"] == c).any()]:
+        s = df[df["demand_case"] == case].set_index("metric")["delta_pct"].reindex(metrics)
+        fig.add_trace(go.Bar(x=labels, y=s.to_numpy(), name=_case_label(case), marker_color=CASE_COLOUR.get(case, ACCENT),
+                             text=[f"{v:+.0f}%" if pd.notna(v) else "" for v in s], textposition="outside",
+                             hovertemplate=f"{_case_label(case)}<br>%{{x}}: %{{y:+.1f}}%<extra></extra>"))
+    fig.update_layout(barmode="group")
+    fig.update_yaxes(title_text="Change against the reference scenario (%)", zeroline=True)
+    return _apply(fig, title, height=460)
+
+
 def fig_to_div(fig: go.Figure, div_id: str, height: int | None = None) -> str:
     if height:
         fig.update_layout(height=height)

@@ -397,6 +397,32 @@ def sensitivity_table(batch) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+VARIANT_METRICS = ["investment_musd_cum", "capacity_mw_cum", "people_reached_cum", "usd_per_new_connection",
+                   "lcoe_energy_w_excl_dens", "grid_share_2040", "grid_ext_people_2040", "mg_pv_people_2040",
+                   "sa_pv_people_2040", "unserved_2030"]
+
+
+def variant_comparison(batch, grid_cost: float = REFERENCE_COST) -> pd.DataFrame:
+    """One row per demand case x supply-side variant at one grid cost: the headline metrics of
+    the variant, of its reference, and the absolute and percent change. Empty when the batch
+    holds no variant."""
+    rows = []
+    for case in CASE_ORDER:
+        ref = batch.by_case(case).get(grid_cost)
+        if ref is None:
+            continue
+        href = headline(ref.settlements)
+        for variant, s in batch.variants(case, grid_cost).items():
+            hv = headline(s.settlements)
+            for m in VARIANT_METRICS:
+                b, v = href[m], hv[m]
+                rows.append({"demand_case": case, "variant": variant, "scenario_id": s.scenario_id, "metric": m,
+                             "reference": b, "variant_value": v, "delta_abs": v - b,
+                             "delta_pct": (v - b) / b * 100 if b else float("nan")})
+    return pd.DataFrame(rows, columns=["demand_case", "variant", "scenario_id", "metric", "reference", "variant_value",
+                                       "delta_abs", "delta_pct"])
+
+
 def never_grid_table(batch) -> pd.DataFrame:
     """Settlements that no scenario of the batch connects to the grid by 2040, by region."""
     ids = None

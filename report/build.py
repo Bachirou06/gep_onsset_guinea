@@ -136,8 +136,12 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     never = M.never_grid_table(batch)
     phasing_bu = M.phasing_table(primary.settlements)
 
+    # --- supply-side variants ---------------------------------------------------
+    vc = M.variant_comparison(batch)
+    variant_names = batch.variant_names()
+
     # --- key messages ---------------------------------------------------------
-    key_messages = MS.key_messages(H, sens, deltas, HY)
+    key_messages = MS.key_messages(H, sens, deltas, HY, vc if len(vc) else None)
     kpis = [{"study_name": CASE_STUDY_NAME.get(s.demand_case, s.demand_case), "description": CASE_DESCRIPTION.get(s.demand_case, ""),
              "people": MS.fmt_people(H[s.demand_case]["people_reached_cum"]),
              "investment": MS.fmt_musd(H[s.demand_case]["investment_musd_cum"]),
@@ -351,6 +355,21 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                        "Change (%)": f"{r.delta_pct:+.1f}"})
     T["t93"] = table_html(pd.DataFrame(dd) if dd else pd.DataFrame([{"Variant": "none", "Metric": "", "Base": "", "Variant value": "", "Change": "", "Change (%)": ""}]),
                           index=False, caption="Table 9.3. Demand variants against their base case at the reference grid cost")
+    VARIANT_LABELS = {"optgrid": "Optimistic grid expansion (no connection or capacity cap to 2030)",
+                      "optgrid_optmg": "Optimistic grid expansion and mini-grid PV panels 25 percent cheaper"}
+    if len(vc):
+        wide = vc.pivot_table(index=["demand_case", "variant", "metric"], values=["reference", "variant_value", "delta_pct"], aggfunc="first")
+        vrows = []
+        for (case, variant, metric), r in wide.iterrows():
+            f = metric_fmt.get(metric, F_INT if "people" in metric or "unserved" in metric else F_2)
+            vrows.append({"Demand case": CASE_STUDY_NAME.get(case, case), "Variant": VARIANT_LABELS.get(variant, variant),
+                          "Metric": METRIC_LABELS.get(metric, metric.replace("_", " ")), "Reference": f.format(r["reference"]),
+                          "Variant value": f.format(r["variant_value"]), "Change (%)": f"{r['delta_pct']:+.1f}" if pd.notna(r["delta_pct"]) else "n/a"})
+        order = {m: i for i, m in enumerate(M.VARIANT_METRICS)}
+        vdf = pd.DataFrame(vrows)
+        T["t94"] = table_html(vdf, index=False, caption="Table 9.4. Supply-side variants against their reference scenario at the reference grid cost")
+    else:
+        T["t94"] = ""
     T["a1"] = table_html(pd.DataFrame([{"Scenario id": s["id"], "Demand case": s["demand_case"], "Overrides": json.dumps(s["overrides"]),
                                         "Legacy run": s.get("legacy_name") or ""} for s in batch.control.get("scenarios", [])]),
                          index=False, caption="Table A.1. Scenario overrides in the control file")
@@ -412,7 +431,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
         figs["ch9"].append({"id": fid, "num": num, "div": F.fig_to_div(F.lines_vs_cost(sens, col, ytitle), fid), "caption": cap,
                             "source": f"sensitivity table over the {len(batch.scenarios)} scenarios; batch {batch.name}"})
     sh_long = pd.DataFrame([{"demand_case": s.demand_case, "grid_cost": s.grid_cost, "code": code, "population": row["population"]}
-                            for s in batch.scenarios.values() if s.demand_case in SENSITIVITY_CASES
+                            for s in batch.scenarios.values() if s.demand_case in SENSITIVITY_CASES and s.variant == "reference"
                             for code, row in M.tech_table(s.settlements, 2040).iterrows() if code in SERVED_CODES])
     cases_present = [c for c in SENSITIVITY_CASES if (sh_long["demand_case"] == c).any()]
     figs["ch9"].append({"id": "fig-9-4", "num": "9.4", "div": F.fig_to_div(F.shares_vs_cost(sh_long, cases_present, "Technology shares of the 2040 population against the grid cost"), "fig-9-4"),
@@ -432,10 +451,22 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                              "source": "Table 9.3"})
     if not figs["ch9b"]:
         figs["ch9b"].append({"id": "fig-9-7", "num": "9.7", "div": "<p class='note'>No demand variant in the batch.</p>", "caption": "Not available.", "source": ""})
+    figs["ch9c"] = []
+    vlabels = {**METRIC_LABELS, "grid_ext_people_2040": "People on grid extension 2040", "mg_pv_people_2040": "People on mini-grid PV 2040",
+               "sa_pv_people_2040": "People on stand-alone PV 2040", "unserved_2030": "People not yet electrified 2030"}
+    for i, variant in enumerate(variant_names):
+        sub = vc[vc["variant"] == variant]
+        fid = "fig-9-8" if i == 0 else f"fig-9-8{'bcd'[i - 1] if i <= 3 else i}"
+        figs["ch9c"].append({"id": fid, "num": "9.8" if i == 0 else f"9.8{'bcd'[i - 1] if i <= 3 else i}",
+                             "div": F.fig_to_div(F.delta_bars_by_case(sub, VARIANT_LABELS.get(variant, variant), vlabels,
+                                                                      [m for m in M.VARIANT_METRICS if m != "unserved_2030"]), fid),
+                             "caption": f"Percent change of the headline metrics under the variant '{VARIANT_LABELS.get(variant, variant)}' "
+                                        f"against the reference scenario of each demand case, at {REFERENCE_COST} USD/kWh.",
+                             "source": "Table 9.4"})
 
     # --- maps ----------------------------------------------------------------------
     stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-    maps_ctx = {"map31": None, "ch4": [], "map61": None, "ch7": [], "map81": None, "map96": None}
+    maps_ctx = {"map31": None, "ch4": [], "map61": None, "ch7": [], "map81": None, "map96": None, "map97": None}
     if maps:
         def add(key, png, caption, source, mid, num, alt, into=None):
             png = MP.shrink_png(png, map_colours) if map_colours else png
@@ -473,6 +504,14 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                                        "Technology switches with a higher grid cost", src(bu[max(bu)], "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi),
                 f"Settlements whose least-cost technology changes when the grid cost rises from {REFERENCE_COST} to {max(bu)} USD/kWh, bottom-up case.",
                 src(bu[max(bu)], "X_deg, Y_deg, FinalElecCode2040, Pop2040"), "map-9-6", "9.6", "Technology switch map")
+        bu_variants = batch.variants("BU")
+        if REFERENCE_COST in bu and bu_variants:
+            vname = "optgrid_optmg" if "optgrid_optmg" in bu_variants else next(iter(bu_variants))
+            vs = bu_variants[vname]
+            add("map97", MP.switch_map(bu[REFERENCE_COST].settlements, vs.settlements, 2040, layers, "the reference", VARIANT_LABELS.get(vname, vname).lower(),
+                                       "Technology switches under the supply-side variant", src(vs, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi),
+                f"Settlements whose least-cost technology changes under the variant '{VARIANT_LABELS.get(vname, vname)}', bottom-up case at {REFERENCE_COST} USD/kWh.",
+                src(vs, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), "map-9-7", "9.7b", "Technology switch map, supply-side variant")
         if corridor:
             add("map81", MP.corridor_map(primary.settlements, geo_attr, layers, corridor_km, "Koukoutamba corridor and affected areas",
                                          src(primary, "X_deg, Y_deg, FinalElecCode2040, Pop2040") + "; HV_KKT.shp; protected-area layers", dpi=map_dpi),
@@ -567,6 +606,12 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                "rules": rules, "caveats": caveats, "maps": maps_ctx, "n_settlements": f"{n_settlements:,}", "reference_cost": REFERENCE_COST,
                "figs": figs, "corridor": corridor, "corridor_text": corridor_text, "corridor_note": corridor_note,
                "model_says": model_says, "model_does_not_say": model_does_not_say, "summaries": summaries, "method_notes": method_notes,
+               "variant_names": variant_names, "variant_labels": VARIANT_LABELS,
+               "variants_text": (f"Two supply-side variants are run for the Table 1 cases at the reference grid cost: full grid expansion "
+                                 f"(the {cap_conn:,},000 connections and {cap_mw} MW per year caps to {yr_mid} removed) and, on top of it, "
+                                 f"mini-grid PV panels 25 percent cheaper (factor 0.75 on the panel cost of the PV-battery mini-grid; battery and "
+                                 f"inverter unchanged). Table 9.4 compares each variant with its reference scenario; Figure 9.8 shows the changes; "
+                                 f"the switch map shows where the bottom-up case changes technology.") if variant_names else "",
                "batch_log": batch.batch_log, "checks_md": batch.checks_md, "plotly_js": F.plotly_js(), **texts}
     html = render(context)
     out_path.write_text(html, encoding="utf-8")
