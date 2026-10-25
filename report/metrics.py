@@ -14,8 +14,7 @@ plan's "Metric definitions" section:
 import numpy as np
 import pandas as pd
 
-from report.constants import (CASE_ORDER, COST_LEVELS, DRE_CODES, GRID_CODES, OFFGRID_CODES, REFERENCE_COST,
-                              SERVED_CODES, TECH_CATEGORY, TECH_KEY, TECH_LABEL, YEARS)
+from report.constants import (CASE_ORDER, CORE_CELLS, COST_LEVELS, DRE_CODES, GRID_CODES, OFFGRID_CODES, PRIMARY_COST, REFERENCE_COST, REGIME_ORDER, SERVED_CODES, TECH_CATEGORY, TECH_KEY, TECH_LABEL, YEARS, core_label)
 
 TOTAL = "Total"
 TOTAL_EXCL = "Total excl. densification"
@@ -427,29 +426,82 @@ def sensitivity_table(batch) -> pd.DataFrame:
 
 
 VARIANT_METRICS = ["investment_musd_cum", "capacity_mw_cum", "people_reached_cum", "usd_per_new_connection",
-                   "lcoe_energy_w_excl_dens", "grid_share_2040", "grid_ext_people_2040", "mg_pv_people_2040",
-                   "sa_pv_people_2040", "unserved_2030"]
+                   "lcoe_energy_w_excl_dens", "grid_share_2040", "dre_share_new_connections", "grid_ext_people_2040",
+                   "mg_pv_people_2040", "sa_pv_people_2040", "unserved_2030"]
+SUMMARY_METRICS = ["investment_musd_cum", "grid_ext_people_2040", "mg_pv_people_2040", "dre_share_new_connections",
+                   "lcoe_energy_w_excl_dens"]
 
 
-def variant_comparison(batch, grid_cost: float = REFERENCE_COST) -> pd.DataFrame:
-    """One row per demand case x supply-side variant at one grid cost: the headline metrics of
-    the variant, of its reference, and the absolute and percent change. Empty when the batch
-    holds no variant."""
+def variant_comparison(batch, grid_costs=None) -> pd.DataFrame:
+    """One row per demand case x grid cost x supply-side variant x metric: the value of the
+    variant, of its reference scenario at the same grid cost, and the absolute and percent change.
+    grid_costs defaults to the regimes of the final scenario set; a float is accepted for one
+    cost. Empty when the batch holds no variant."""
+    if grid_costs is None:
+        grid_costs = REGIME_ORDER
+    elif isinstance(grid_costs, (int, float)):
+        grid_costs = [grid_costs]
     rows = []
     for case in CASE_ORDER:
-        ref = batch.by_case(case).get(grid_cost)
-        if ref is None:
+        by_cost = batch.by_case(case)
+        for cost in grid_costs:
+            ref = by_cost.get(cost)
+            if ref is None:
+                continue
+            href = headline(ref.settlements)
+            for variant, s in batch.variants(case, cost).items():
+                hv = headline(s.settlements)
+                for m in VARIANT_METRICS:
+                    b, v = href[m], hv[m]
+                    rows.append({"demand_case": case, "grid_cost": cost, "variant": variant, "scenario_id": s.scenario_id,
+                                 "metric": m, "reference": b, "variant_value": v, "delta_abs": v - b,
+                                 "delta_pct": (v - b) / b * 100 if b else float("nan")})
+    return pd.DataFrame(rows, columns=["demand_case", "grid_cost", "variant", "scenario_id", "metric", "reference",
+                                       "variant_value", "delta_abs", "delta_pct"])
+
+
+def variant_summary(vc: pd.DataFrame) -> pd.DataFrame:
+    """Wide view of variant_comparison for the SUMMARY_METRICS: index (demand_case, grid_cost,
+    variant), columns <metric>_ref, <metric>_var, <metric>_pct."""
+    cols = []
+    if not len(vc):
+        for m in SUMMARY_METRICS:
+            cols += [f"{m}_ref", f"{m}_var", f"{m}_pct"]
+        return pd.DataFrame(columns=cols, index=pd.MultiIndex.from_tuples([], names=["demand_case", "grid_cost", "variant"]))
+    sub = vc[vc["metric"].isin(SUMMARY_METRICS)]
+    w = sub.pivot_table(index=["demand_case", "grid_cost", "variant"], columns="metric",
+                        values=["reference", "variant_value", "delta_pct"], aggfunc="first")
+    out = pd.DataFrame(index=w.index)
+    for m in SUMMARY_METRICS:
+        if m in w["reference"].columns:
+            out[f"{m}_ref"] = w[("reference", m)]
+            out[f"{m}_var"] = w[("variant_value", m)]
+            out[f"{m}_pct"] = w[("delta_pct", m)]
+    order = {k: i for i, k in enumerate(CORE_CELLS)}
+    keys = sorted(out.index, key=lambda k: (order.get((k[0], k[1]), 99), k[2]))
+    return out.loc[keys]
+
+
+def core_headlines(batch) -> dict:
+    """headline() of every core cell present in the batch, keyed by its display label, in
+    CORE_CELLS order."""
+    return {core_label(*k): headline(s.settlements) for k, s in batch.core().items()}
+
+
+def regime_switch_table(batch, top: int = 3) -> pd.DataFrame:
+    """Technology switches from the primary regime to each subsidised regime, per key case:
+    settlements, people and the top flows as (from_code, to_code, people). Rows only for the
+    pairs present in the batch."""
+    core = batch.core()
+    rows = []
+    for case, cost in CORE_CELLS:
+        if cost == PRIMARY_COST or (case, PRIMARY_COST) not in core or (case, cost) not in core:
             continue
-        href = headline(ref.settlements)
-        for variant, s in batch.variants(case, grid_cost).items():
-            hv = headline(s.settlements)
-            for m in VARIANT_METRICS:
-                b, v = href[m], hv[m]
-                rows.append({"demand_case": case, "variant": variant, "scenario_id": s.scenario_id, "metric": m,
-                             "reference": b, "variant_value": v, "delta_abs": v - b,
-                             "delta_pct": (v - b) / b * 100 if b else float("nan")})
-    return pd.DataFrame(rows, columns=["demand_case", "variant", "scenario_id", "metric", "reference", "variant_value",
-                                       "delta_abs", "delta_pct"])
+        fl, tot = switches(core[(case, PRIMARY_COST)].settlements, core[(case, cost)].settlements, 2040)
+        flows = [(int(r.from_code), int(r.to_code), float(r.people)) for r in fl.head(top).itertuples()]
+        rows.append({"demand_case": case, "from_cost": PRIMARY_COST, "to_cost": cost,
+                     "settlements": int(tot["settlements"]), "people": float(tot["people"]), "flows": flows})
+    return pd.DataFrame(rows, columns=["demand_case", "from_cost", "to_cost", "settlements", "people", "flows"])
 
 
 def cost_bin_table(batch, case: str = "BU") -> pd.DataFrame:
