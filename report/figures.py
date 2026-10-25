@@ -148,7 +148,7 @@ def fig_to_div(fig: go.Figure, div_id: str, height: int | None = None) -> str:
         fig.update_layout(height=height)
     return fig.to_html(full_html=False, include_plotlyjs=False, div_id=div_id,
                        config={"responsive": True, "displaylogo": False,
-                               "modeBarButtonsToRemove": ["select2d", "lasso2d"]})
+                               "modeBarButtonsToRemove": ["select2d", "lasso2d", "toImage"]})
 
 
 def plotly_js() -> str:
