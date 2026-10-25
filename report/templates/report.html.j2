@@ -167,7 +167,9 @@
 {% endfor %}
 <div class="table-wrap">{{ tables.t91 }}</div>
 <div class="table-wrap">{{ tables.t92 }}</div>
-{% if maps.map96 %}<figure id="map-9-6"><img src="{{ maps.map96.uri }}" alt="Technology switch map"><figcaption><b>Figure 9.6.</b> {{ maps.map96.caption | e }}</figcaption><p class="source">Source: {{ maps.map96.source | e }}</p></figure>{% endif %}
+{% for m in maps.ch9 %}
+<figure id="{{ m.id }}"><img src="{{ m.uri }}" alt="{{ m.alt | e }}"><figcaption><b>Figure {{ m.num }}.</b> {{ m.caption | e }}</figcaption><p class="source">Source: {{ m.source | e }}</p></figure>
+{% endfor %}
 <h3>Demand variants</h3>
 <div class="table-wrap">{{ tables.t93 }}</div>
 {% for f in figs.ch9b %}

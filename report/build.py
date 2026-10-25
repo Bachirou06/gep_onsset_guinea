@@ -452,7 +452,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                         "caption": "Shares of the 2040 population by least-cost technology at each grid generation cost, per demand case.",
                         "source": f"FinalElecCode2040 and Pop2040 of the {len(sh_long['demand_case'].unique()) * len(COST_LEVELS)} sensitivity Results files"})
     # switch heat maps at the highest grid cost for every key case that has it
-    hi_cost_all = max(cost_levels)
+    hi_cost_all = max(c for c in cost_levels if c in COST_LEVELS)      # the study's high variant (0.22), shared by the key cases; BU's finer bins live in their own section
     n_sw = 0
     for case in [c for c in SENSITIVITY_CASES if c in ref_by_case]:
         by_cost = batch.by_case(case)
@@ -524,7 +524,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
 
     # --- maps ----------------------------------------------------------------------
     stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-    maps_ctx = {"map31": None, "ch4": [], "map61": None, "ch7": [], "map81": None, "map96": None, "map97": None}
+    maps_ctx = {"map31": None, "ch4": [], "map61": None, "ch7": [], "map81": None, "ch9": [], "map97": None}
     if maps:
         def add(key, png, caption, source, mid, num, alt, into=None):
             png = MP.shrink_png(png, map_colours) if map_colours else png
@@ -557,11 +557,19 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                                        subtitle=f"{CASE_DESCRIPTION.get(case, '')}, grid cost {REFERENCE_COST} USD/kWh", dpi=map_dpi),
                 f"Least-cost technology in 2030 (70 percent access) and 2040 (universal access), {nm} case.",
                 src(s, "X_deg, Y_deg, FinalElecCode2030, FinalElecCode2040"), f"map-7-1-{case}", f"7.1{'ab'[i]}", f"Two-panel phasing map, {nm}", into=maps_ctx["ch7"])
-        if REFERENCE_COST in bu and max(bu) != REFERENCE_COST:
-            add("map96", MP.switch_map(bu[REFERENCE_COST].settlements, bu[max(bu)].settlements, 2040, layers, f"{REFERENCE_COST} USD/kWh", f"{max(bu)} USD/kWh",
-                                       "Technology switches with a higher grid cost", src(bu[max(bu)], "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi),
-                f"Settlements whose least-cost technology changes when the grid cost rises from {REFERENCE_COST} to {max(bu)} USD/kWh, bottom-up case.",
-                src(bu[max(bu)], "X_deg, Y_deg, FinalElecCode2040, Pop2040"), "map-9-6", "9.6", "Technology switch map")
+        n_map = 0
+        for case in [c for c in SENSITIVITY_CASES if c in ref_by_case]:
+            by_cost = batch.by_case(case)
+            if hi_cost_all not in by_cost or REFERENCE_COST not in by_cost:
+                continue
+            nm = CASE_STUDY_NAME.get(case, case)
+            hi_s = by_cost[hi_cost_all]
+            add(None, MP.switch_map(by_cost[REFERENCE_COST].settlements, hi_s.settlements, 2040, layers, f"{REFERENCE_COST} USD/kWh", f"{hi_cost_all} USD/kWh",
+                                    f"Technology switches with a higher grid cost, {nm} case", src(hi_s, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi),
+                f"Settlements whose least-cost technology changes when the grid cost rises from {REFERENCE_COST} to {hi_cost_all} USD/kWh, {nm} case.",
+                src(hi_s, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), "map-9-6" if n_map == 0 else f"map-9-6-{case}",
+                "9.6" if n_map == 0 else f"9.6{'bcd'[n_map - 1]}", f"Technology switch map, {nm}", into=maps_ctx["ch9"])
+            n_map += 1
         bu_variants = batch.variants("BU")
         if REFERENCE_COST in bu and bu_variants:
             vname = "optgrid_optmg" if "optgrid_optmg" in bu_variants else next(iter(bu_variants))
