@@ -90,11 +90,13 @@ def km_investment_range(headlines: dict) -> dict:
 
 def km_unserved_2030(headlines: dict) -> dict:
     ref = headlines.get("BU") or headlines[next(iter(headlines))]
+    first = _check(ref["investment_musd_2030"], "investment_musd_2030")
+    ratio = _check(ref["investment_musd_2040"]) / first if first else float("nan")
+    ratio_text = f" is about {ratio:.1f} times the first" if first else " compares with no investment in the first"
     return {"id": "km-2030",
             "text": (f"The 2030 target of 70 percent access leaves {fmt_people(ref['unserved_2030'])} people to be "
                      f"connected between 2030 and 2040; investment in the second period "
-                     f"({fmt_musd(ref['investment_musd_2040'])} in the bottom-up case) is about "
-                     f"{ref['investment_musd_2040'] / ref['investment_musd_2030']:.1f} times the first "
+                     f"({fmt_musd(ref['investment_musd_2040'])} in the bottom-up case){ratio_text} "
                      f"({fmt_musd(ref['investment_musd_2030'])})."),
             "source": "Table 7.1"}
 
@@ -118,8 +120,8 @@ def km_cost_per_connection(headlines: dict) -> dict:
     lo, hi = _minmax(headlines, "usd_per_new_connection")
     return {"id": "km-usd-per-connection",
             "text": (f"Capital cost per newly connected person ranges from {fmt_usd(lo[1])} ({name(lo[0])}) to "
-                     f"{fmt_usd(hi[1])} ({name(hi[0])}), driven by the demand tier rather than by the technology "
-                     f"mix."),
+                     f"{fmt_usd(hi[1])} ({name(hi[0])}) across the demand cases; Table 5.1 gives the figure "
+                     f"by technology."),
             "source": "Table 5.1"}
 
 
@@ -159,17 +161,83 @@ def km_grid_cost_sensitivity(sens: pd.DataFrame, case: str = "BU") -> dict:
             "source": "Figures 9.1 to 9.5, Tables 9.1 and 9.2"}
 
 
-def km_demand_sensitivity(deltas: dict) -> dict:
-    parts = []
+def _grid_cost_swing_pct(sens: pd.DataFrame, case: str = "BU") -> float:
+    """Percent change of cumulative investment between the reference and the highest grid cost."""
+    if sens is None or not len(sens) or not (sens["demand_case"] == case).any():
+        return float("nan")
+    s = sens[sens["demand_case"] == case].set_index("grid_cost")
+    ref = _check(s.loc[REFERENCE_COST, "investment_musd_cum"])
+    return (_check(s.loc[float(s.index.max()), "investment_musd_cum"]) - ref) / ref * 100
+
+
+def km_demand_sensitivity(deltas: dict, sens: pd.DataFrame = None) -> dict:
+    """Demand variants against their base case. The delivered-cost clause uses the LCOE of the
+    newly electrified settlements (the all-settlements figure moves with the densification
+    weight, not with the cost of new access). The comparison with the grid cost is computed."""
+    parts, swings = [], []
     for variant, base in (("TD_Low_minus", "TD_Low"), ("TD_High_plus", "TD_High")):
         if variant in deltas:
             d = deltas[variant]
-            parts.append(f"{name(variant)} against {name(base)} {direction(d['investment_musd_cum'] / 100, 'raises', 'lowers')} "
-                         f"investment by {abs(_check(d['investment_musd_cum'])):.0f}% and "
-                         f"{direction(d['lcoe_energy_w'] / 100, 'raises', 'lowers')} the delivered cost by "
-                         f"{abs(_check(d['lcoe_energy_w'])):.0f}%")
-    text = "; ".join(parts) if parts else "no demand variant was run"
-    return {"id": "km-demand", "text": f"Demand tiers matter more than the grid cost: {text}.", "source": "Table 9.3"}
+            inv = _check(d["investment_musd_cum"], f"{variant}.investment")
+            lcoe_key = "lcoe_energy_w_excl_dens" if "lcoe_energy_w_excl_dens" in d else "lcoe_energy_w"
+            lc = _check(d[lcoe_key], f"{variant}.lcoe")
+            swings.append(abs(inv))
+            cost_clause = (f"{direction(lc / 100, 'raises', 'lowers')} the delivered cost of the newly electrified "
+                           f"settlements by {abs(lc):.0f}%" if abs(lc) > 0.5 else
+                           "leaves the delivered cost of the newly electrified settlements unchanged")
+            parts.append(f"{name(variant)} against {name(base)} {direction(inv / 100, 'raises', 'lowers')} "
+                         f"investment by {abs(inv):.0f}% and {cost_clause}")
+    if not parts:
+        return {"id": "km-demand", "text": "No demand variant was run in this batch.", "source": "Table 9.3"}
+    text = "; ".join(parts)
+    grid_swing = _grid_cost_swing_pct(sens)
+    lead = ""
+    if swings and not math.isnan(grid_swing):
+        if max(swings) > abs(grid_swing):
+            lead = (f"Demand tiers move investment more than the grid cost ({max(swings):.0f}% against "
+                    f"{abs(grid_swing):.0f}% for the highest grid cost): ")
+        else:
+            lead = (f"The grid cost moves investment more than the demand tiers ({abs(grid_swing):.0f}% against "
+                    f"{max(swings):.0f}%): ")
+    return {"id": "km-demand", "text": f"{lead}{text}.", "source": "Table 9.3"}
+
+
+def km_grid_extension_vanishes(sens: pd.DataFrame) -> dict:
+    """What happens to grid extension at the highest grid cost, per sensitivity case."""
+    hi = float(sens["grid_cost"].max())
+    parts, gone = [], []
+    for case in SENSITIVITY_CASES:
+        s = sens[sens["demand_case"] == case].set_index("grid_cost")
+        if hi not in s.index or REFERENCE_COST not in s.index:
+            continue
+        ref_p, hi_p = _check(s.loc[REFERENCE_COST, "grid_ext_people"]), _check(s.loc[hi, "grid_ext_people"])
+        if hi_p <= 0:
+            gone.append(name(case))
+        else:
+            parts.append(f"{fmt_people(hi_p)} in {name(case)} against {fmt_people(ref_p)} at the reference")
+    if gone and not parts:
+        text = (f"At {hi} USD/kWh no settlement is connected by grid extension in any case ({', '.join(gone)}): "
+                f"grid extension disappears from the least-cost mix once generation is priced at its unsubsidised cost, "
+                f"and densification of the existing network is the only grid growth left.")
+    elif gone:
+        text = (f"At {hi} USD/kWh grid extension disappears from the least-cost mix in {', '.join(gone)} and shrinks to "
+                f"{'; '.join(parts)}.")
+    else:
+        text = f"At {hi} USD/kWh grid extension shrinks to {'; '.join(parts)}."
+    return {"id": "km-grid-extension", "text": text, "source": "Table 9.1"}
+
+
+def km_newly_electrified_lcoe(headlines: dict) -> dict:
+    """The delivered cost of the newly electrified settlements, ordered across the demand cases."""
+    items = [(c, _check(headlines[c]["lcoe_energy_w_excl_dens"], f"{c}.lcoe_excl")) for c in CASE_ORDER if c in headlines]
+    items.sort(key=lambda t: t[1])
+    lo, hi = items[0], items[-1]
+    listing = ", ".join(f"{fmt_lcoe(v)} ({name(c)})" for c, v in items)
+    return {"id": "km-new-lcoe",
+            "text": (f"For the newly electrified settlements the delivered cost runs from {fmt_lcoe(lo[1])} ({name(lo[0])}) to "
+                     f"{fmt_lcoe(hi[1])} ({name(hi[0])}): {listing}. Lower demand tiers spread the same connection and "
+                     f"generation costs over less energy, so the cost per kWh rises as the tier falls."),
+            "source": "Tables 4.1 and 5.3"}
 
 
 def km_hydro(hydro: dict, case: str = "BU") -> dict:
@@ -183,12 +251,15 @@ def km_hydro(hydro: dict, case: str = "BU") -> dict:
 
 def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict) -> list:
     msgs = [km_investment_range(headlines), km_tech_mix(headlines), km_cost_per_connection(headlines),
-            km_people_per_musd(headlines), km_lcoe(headlines), km_unserved_2030(headlines)]
+            km_people_per_musd(headlines), km_lcoe(headlines), km_newly_electrified_lcoe(headlines),
+            km_unserved_2030(headlines)]
     if sens is not None and len(sens):
         case = "BU" if (sens["demand_case"] == "BU").any() else SENSITIVITY_CASES[0]
         msgs.append(km_grid_cost_sensitivity(sens, case))
+        if "grid_ext_people" in sens:
+            msgs.append(km_grid_extension_vanishes(sens))
     if deltas:
-        msgs.append(km_demand_sensitivity(deltas))
+        msgs.append(km_demand_sensitivity(deltas, sens))
     if hydro:
         msgs.append(km_hydro(hydro))
     for m in msgs:

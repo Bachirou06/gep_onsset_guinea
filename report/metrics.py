@@ -230,12 +230,20 @@ def urban_rural_table(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def hydro_table(df: pd.DataFrame, year: int = 2040) -> dict:
+    """Hydro mini-grids in the given year plus the cumulative capacity and investment over
+    both periods (a settlement served by hydro in 2030 keeps its hydro investment)."""
     sel = (df[f"FinalElecCode{year}"] == 7) & served_mask(df, year)
     g = df[sel]
+    cap_cum = inv_cum = 0.0
+    for y in YEARS:
+        s = (df[f"FinalElecCode{y}"] == 7) & served_mask(df, y)
+        cap_cum += float(df.loc[s, f"NewCapacity{y}"].sum()) / 1000.0
+        inv_cum += float(df.loc[s, f"InvestmentCost{y}"].sum()) / 1e6
     return {"sites": int(g["HydropowerFID"].nunique()), "settlements": int(len(g)),
             "people": float(g[f"Pop{year}"].sum()),
             "capacity_mw": float(g[f"NewCapacity{year}"].sum()) / 1000.0,
             "investment_musd": float(g[f"InvestmentCost{year}"].sum()) / 1e6,
+            "capacity_mw_cum": cap_cum, "investment_musd_cum": inv_cum,
             "mean_dist_km": float(g["HydropowerDist"].mean()) if len(g) else float("nan")}
 
 
@@ -274,13 +282,26 @@ def phasing_table(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(parts)
 
 
-def lcoe_histogram(df: pd.DataFrame, year: int, bins=None) -> pd.DataFrame:
-    """Population-weighted histogram of the delivered LCOE over served rows."""
+def lcoe_histogram(df: pd.DataFrame, year: int, bins=None, newly_electrified_only: bool = False) -> pd.DataFrame:
+    """Population-weighted histogram of the delivered LCOE over served rows. Regular bins of
+    0.005 USD/kWh up to 0.6, then one overflow bin up to the data maximum so that every
+    served person is counted (the sum of `people` equals the served population)."""
     if bins is None:
         bins = np.arange(0.0, 0.605, 0.005)
-    m = lcoe_mask(df, year)
-    counts, edges = np.histogram(df.loc[m, f"MinimumOverallLCOE{year}"], bins=bins, weights=df.loc[m, f"Pop{year}"])
-    return pd.DataFrame({"bin_left": edges[:-1], "bin_right": edges[1:], "people": counts})
+    bins = np.asarray(bins, dtype=float)
+    m = lcoe_mask(df, year, newly_electrified_only)
+    values = df.loc[m, f"MinimumOverallLCOE{year}"].astype(float)
+    weights = df.loc[m, f"Pop{year}"].astype(float)
+    overflow = np.zeros(len(bins) - 1, dtype=bool)
+    if len(values) and values.max() > bins[-1]:
+        bins = np.append(bins, float(np.ceil(values.max() * 20) / 20))
+        overflow = np.append(overflow, True)
+    counts, edges = np.histogram(values, bins=bins, weights=weights)
+    out = pd.DataFrame({"bin_left": edges[:-1], "bin_right": edges[1:], "people": counts, "overflow": overflow})
+    total = float(weights.sum())
+    if abs(float(out["people"].sum()) - total) > 1e-6 * max(total, 1.0):
+        raise ValueError("lcoe_histogram lost people: bins do not cover the data")
+    return out
 
 
 def switches(df_ref: pd.DataFrame, df_alt: pd.DataFrame, year: int = 2040):
@@ -313,30 +334,10 @@ def demand_delta(df_var: pd.DataFrame, df_base: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def corridor_table(df: pd.DataFrame, geo_attr: pd.DataFrame, radius_km: float,
-                   dist_col: str = "kkt_main_dist_km") -> dict:
-    """Metrics for the settlements within radius_km of the line (geo_attr joined on id)."""
-    j = df.merge(geo_attr[["id", dist_col]], on="id", how="inner")
-    g = j[j[dist_col] <= radius_km]
-    if g.empty:
-        return {"settlements": 0, "people_2040": 0.0}
-    cum = cumulative_table(g)
-    nc = float(cum.loc[TOTAL, "new_connections_cum"])
-    inv = float(cum.loc[TOTAL, "investment_musd_cum"])
-    code = g["FinalElecCode2040"]
-    mix = {c: float(g.loc[code == c, "Pop2040"].sum()) for c in SERVED_CODES}
-    return {"settlements": int(len(g)), "people_2040": float(g["Pop2040"].sum()),
-            "people_start": float(g["PopStartYear"].sum()) if "PopStartYear" in g else float("nan"),
-            "electrified_start_settlements": int((g["ElecStart"] == 1).sum()),
-            "new_connections_cum": nc, "investment_musd_cum": inv,
-            "usd_per_new_connection": inv * 1e6 / nc if nc else float("nan"),
-            "lcoe_energy_w": weighted_lcoe(g, 2040, "energy"),
-            "mix_pop_2040": mix,
-            "grid_share_2040": float(category_shares(g, 2040).get("Grid", 0.0))}
-
-
 def subset_table(df: pd.DataFrame, mask: pd.Series) -> dict:
-    """Same metrics as corridor_table for an arbitrary boolean selection of settlements."""
+    """Metrics for an arbitrary selection of settlements: all settlements and, separately,
+    the newly electrified ones (ElecStart == 0), whose delivered LCOE and grid share are the
+    figures to compare with a grid-fed alternative."""
     g = df[mask]
     if g.empty:
         return {"settlements": 0, "people_2040": 0.0}
@@ -344,13 +345,25 @@ def subset_table(df: pd.DataFrame, mask: pd.Series) -> dict:
     nc = float(cum.loc[TOTAL, "new_connections_cum"])
     inv = float(cum.loc[TOTAL, "investment_musd_cum"])
     code = g["FinalElecCode2040"]
+    new = g[g["ElecStart"] == 0]
     return {"settlements": int(len(g)), "people_2040": float(g["Pop2040"].sum()),
+            "people_start": float(g["PopStartYear"].sum()) if "PopStartYear" in g else float("nan"),
             "electrified_start_settlements": int((g["ElecStart"] == 1).sum()),
+            "people_newly_electrified_2040": float(new["Pop2040"].sum()),
             "new_connections_cum": nc, "investment_musd_cum": inv,
             "usd_per_new_connection": inv * 1e6 / nc if nc else float("nan"),
             "lcoe_energy_w": weighted_lcoe(g, 2040, "energy"),
+            "lcoe_energy_w_excl_dens": weighted_lcoe(g, 2040, "energy", exclude_densification=True),
             "mix_pop_2040": {c: float(g.loc[code == c, "Pop2040"].sum()) for c in SERVED_CODES},
-            "grid_share_2040": float(category_shares(g, 2040).get("Grid", 0.0))}
+            "grid_share_2040": float(category_shares(g, 2040).get("Grid", 0.0)),
+            "grid_share_newly_electrified": float(category_shares(g, 2040, newly_electrified_only=True).get("Grid", 0.0))}
+
+
+def corridor_table(df: pd.DataFrame, geo_attr: pd.DataFrame, radius_km: float,
+                   dist_col: str = "kkt_main_dist_km") -> dict:
+    """subset_table for the settlements within radius_km of the line (geo_attr joined on id)."""
+    j = df.merge(geo_attr[["id", dist_col]], on="id", how="inner")
+    return subset_table(j, j[dist_col] <= radius_km)
 
 
 # ---------------------------------------------------------------------------

@@ -63,7 +63,8 @@ def _tech_rows_table(by_case: dict, column: str, fmt: str, caption: str, index_l
     """Rows technology (+ totals), columns study names, from per-case consultancy_metrics frames."""
     frame = pd.DataFrame({name: cm[column] for name, cm in by_case.items()})
     frame.index = [TECH_LABEL.get(i, i) if not isinstance(i, str) else i for i in frame.index]
-    return table_html(frame, {c: fmt for c in frame.columns}, caption=caption, index_label=index_label)
+    return table_html(frame, {c: fmt for c in frame.columns}, caption=caption, index_label=index_label,
+                      total_rows=[M.TOTAL, M.TOTAL_EXCL])
 
 
 DEFAULT_MAP_COLOURS = 96     # palette quantisation of the map PNGs; six technology colours plus greys lose nothing
@@ -141,7 +142,19 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
              "people": MS.fmt_people(H[s.demand_case]["people_reached_cum"]),
              "investment": MS.fmt_musd(H[s.demand_case]["investment_musd_cum"]),
              "usd_per_connection": MS.fmt_usd(H[s.demand_case]["usd_per_new_connection"]),
-             "lcoe": MS.fmt_lcoe(H[s.demand_case]["lcoe_energy_w"])} for s in refs]
+             "lcoe": MS.fmt_lcoe(H[s.demand_case]["lcoe_energy_w"]),
+             "lcoe_new": MS.fmt_lcoe(H[s.demand_case]["lcoe_energy_w_excl_dens"])} for s in refs]
+    n_urban = int((primary.settlements["IsUrban"] == 2).sum())
+    urban_people = float(primary.settlements.loc[primary.settlements["IsUrban"] == 2, "Pop2040"].sum())
+    meta = batch.control.get("meta", {})
+    p_ref = primary.manifest.get("parameters", {})
+    cap_conn = p_ref.get("annual_new_grid_connections_limit_intermediate", 127)
+    cap_mw = p_ref.get("annual_grid_cap_gen_limit_intermediate", 90)
+    disc = p_ref.get("discount_rate", 0.08)
+    target_mid = p_ref.get("intermediate_electrification_target", 0.7)
+    yr_start, yr_mid, yr_end = p_ref.get("start_year", 2025), p_ref.get("intermediate_year", 2030), p_ref.get("end_year", 2040)
+    cost_levels = sorted({s.grid_cost for s in batch.scenarios.values()})
+    hi_cost = max(cost_levels)
 
     # --- tables -------------------------------------------------------------------
     T = {}
@@ -158,13 +171,24 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
             "mg_pv_capital_cost", "mg_hydro_capital_cost", "sa_pv_capital_cost_1", "sa_pv_capital_cost_3", "sa_pv_capital_cost_5",
             "mv_line_cost", "lv_line_cost", "hv_line_cost", "tier_1", "tier_2", "tier_3", "tier_4", "tier_5",
             "productive_demand", "productive_preference", "tech_switches", "diesel_techs", "pop_threshold"]
-    T["t22"] = table_html(pd.DataFrame([{"Parameter": k, "Value": str(p.get(k, ""))} for k in keys if k in p]), index=False,
+    def _readable(k, v):
+        if isinstance(v, dict) and set(v) == {"inf"}:
+            return f"{v['inf']:,.0f} USD/kW, all years"
+        if k == "tech_switches" and isinstance(v, dict):
+            return ", ".join(f"{t} {'on' if on else 'off'}" for t, on in v.items())
+        if isinstance(v, float) and v.is_integer():
+            return f"{int(v):,}"
+        if isinstance(v, (int, float)):
+            return f"{v:,}" if abs(v) >= 1000 else str(v)
+        return str(v)
+    T["t22"] = table_html(pd.DataFrame([{"Parameter": k, "Value": _readable(k, p[k])} for k in keys if k in p]), index=False,
                           caption="Table 2.2. Shared assumptions of every scenario (from the batch manifests)")
     cal = primary.manifest.get("calibration", {})
-    cal_rows = [{"Parameter": k, "Value": str(v)} for k, v in cal.items()]
+    cal_rows = [{"Parameter": k, "Value": _readable(k, v)} for k, v in cal.items()]
     cal_rows += [{"Parameter": "calibrated input", "Value": ", ".join(batch.provenance()["calibrated_csv"])},
                  {"Parameter": "settlements in the model", "Value": f"{primary.manifest.get('rows_out', n_settlements):,}"},
-                 {"Parameter": "raw extraction", "Value": "OnSSET_InputFile_20261018_100416.csv (post extraction fix, confirmed 2026-10-24)"}]
+                 {"Parameter": "raw extraction", "Value": meta.get("input_file_confirmed", "see the control file")},
+                 {"Parameter": "settlements classed urban", "Value": f"{n_urban} ({MS.fmt_people(urban_people)} people in {yr_end})"}]
     T["t23"] = table_html(pd.DataFrame(cal_rows), index=False, caption="Table 2.3. Calibration block and input file")
     sup = batch.control.get("meta", {}).get("superseded_runs", {})
     T["t24"] = table_html(pd.DataFrame([{"Earlier run": k, "Status": v} for k, v in sup.items()]) if sup else
@@ -176,11 +200,12 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                           col_labels={"settlements": "Settlements", "electrified_settlements": "Electrified settlements",
                                       "pop_start": "Population 2025", "electrified_pop_start": "Electrified population 2025",
                                       "access_rate_start": "Access rate 2025", "urban_pop_start": "Urban population 2025"},
-                          index_label="Region")
+                          index_label="Region", total_rows=["Total"])
+    never = pd.concat([never.drop(index="Total", errors="ignore"), never.loc[["Total"]]]) if "Total" in never.index else never
     T["t32"] = table_html(never, {"settlements": F_INT, "people_2040": F_INT, "people_start": F_INT},
                           caption="Table 3.2. Settlements that no scenario connects to the grid by 2040, by region",
                           col_labels={"settlements": "Settlements", "people_2040": "People 2040", "people_start": "People 2025"},
-                          index_label="Region")
+                          index_label="Region", total_rows=["Total"])
     hl = pd.DataFrame({CASE_STUDY_NAME.get(c, c): H[c] for c in H}).T
     hl_cols = ["population_2040", "people_reached_cum", "investment_musd_cum", "capacity_mw_cum", "usd_per_new_connection",
                "people_per_musd", "lcoe_energy_w", "lcoe_energy_w_excl_dens", "grid_share_2040"]
@@ -217,10 +242,13 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
         "Off-grid, newly electrified": 1 - M.category_shares(s.settlements, 2040, True).get("Grid", 0.0)} for s in refs}).T
     T["t54"] = table_html(sh, {c: F_PCT for c in sh.columns}, caption="Table 5.4. Grid and off-grid shares of the 2040 population, all settlements and newly electrified settlements only", index_label="Demand case")
     hy = pd.DataFrame({CASE_STUDY_NAME.get(c, c): HY[c] for c in HY}).T
-    T["t61"] = table_html(hy, {"sites": F_INT, "settlements": F_INT, "people": F_INT, "capacity_mw": F_2, "investment_musd": F_2, "mean_dist_km": F_1},
-                          caption="Table 6.1. Hydro mini-grids in 2040 per demand case",
-                          col_labels={"sites": "Sites used", "settlements": "Settlements", "people": "People 2040", "capacity_mw": "Capacity (MW)",
-                                      "investment_musd": "Investment 2040 (million USD)", "mean_dist_km": "Mean distance to site (km)"},
+    T["t61"] = table_html(hy[["sites", "settlements", "people", "capacity_mw", "investment_musd", "capacity_mw_cum", "investment_musd_cum", "mean_dist_km"]],
+                          {"sites": F_INT, "settlements": F_INT, "people": F_INT, "capacity_mw": F_2, "investment_musd": F_2,
+                           "capacity_mw_cum": F_2, "investment_musd_cum": F_2, "mean_dist_km": F_1},
+                          caption="Table 6.1. Hydro mini-grids per demand case: the 2040 period, and cumulative over 2025 to 2040",
+                          col_labels={"sites": "Sites used 2040", "settlements": "Settlements 2040", "people": "People 2040", "capacity_mw": "Capacity 2040 period (MW)",
+                                      "investment_musd": "Investment 2040 period (million USD)", "capacity_mw_cum": "Capacity cumulative (MW)",
+                                      "investment_musd_cum": "Investment cumulative (million USD)", "mean_dist_km": "Mean distance to site (km)"},
                           index_label="Demand case")
     ph = []
     for y in (2030, 2040):
@@ -245,15 +273,21 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                 cr.append({"Demand case": CASE_STUDY_NAME.get(s.demand_case, s.demand_case), "Corridor (km)": r, **{k: v for k, v in c.items() if k != "mix_pop_2040"},
                            **{f"pop_{TECH[k][0]}": v for k, v in c.get("mix_pop_2040", {}).items()}})
         crd = pd.DataFrame(cr)
-        T["t81"] = table_html(crd, {"settlements": F_INT, "people_2040": F_INT, "people_start": F_INT, "electrified_start_settlements": F_INT,
-                                    "new_connections_cum": F_INT, "investment_musd_cum": F_2, "usd_per_new_connection": F_INT,
-                                    "lcoe_energy_w": F_LCOE, "grid_share_2040": F_PCT, **{f"pop_{TECH[k][0]}": F_INT for k in SERVED_CODES}},
-                              index=False, caption="Table 8.1. Settlements within a corridor of the planned Linsan to Manantali line, per demand case",
-                              col_labels={"settlements": "Settlements", "people_2040": "People 2040", "people_start": "People 2025",
-                                          "electrified_start_settlements": "Grid-connected 2025", "new_connections_cum": "New connections",
-                                          "investment_musd_cum": "Investment (million USD)", "usd_per_new_connection": "USD per person",
-                                          "lcoe_energy_w": "LCOE (USD/kWh)", "grid_share_2040": "Grid share 2040",
-                                          **{f"pop_{TECH[k][0]}": f"People on {TECH_LABEL[k].lower()}" for k in SERVED_CODES}})
+        corridor_formats = {"settlements": F_INT, "people_2040": F_INT, "people_start": F_INT, "electrified_start_settlements": F_INT,
+                            "people_newly_electrified_2040": F_INT, "new_connections_cum": F_INT, "investment_musd_cum": F_2,
+                            "usd_per_new_connection": F_INT, "lcoe_energy_w": F_LCOE, "lcoe_energy_w_excl_dens": F_LCOE,
+                            "grid_share_2040": F_PCT, "grid_share_newly_electrified": F_PCT, **{f"pop_{TECH[k][0]}": F_INT for k in SERVED_CODES}}
+        corridor_labels = {"settlements": "Settlements", "people_2040": "People 2040", "people_start": "People 2025",
+                           "electrified_start_settlements": "Settlements grid-connected in 2025",
+                           "people_newly_electrified_2040": "People in newly electrified settlements, 2040",
+                           "new_connections_cum": "New connections", "investment_musd_cum": "Investment (million USD)",
+                           "usd_per_new_connection": "USD per person", "lcoe_energy_w": "LCOE, all (USD/kWh)",
+                           "lcoe_energy_w_excl_dens": "LCOE, newly electrified (USD/kWh)", "grid_share_2040": "Grid share, all",
+                           "grid_share_newly_electrified": "Grid share, newly electrified",
+                           **{f"pop_{TECH[k][0]}": f"People on {TECH_LABEL[k][0].lower() + TECH_LABEL[k][1:]}" for k in SERVED_CODES}}
+        T["t81"] = table_html(crd, corridor_formats, index=False,
+                              caption="Table 8.1. Settlements within a corridor of the planned Linsan to Manantali line, per demand case",
+                              col_labels=corridor_labels)
         sub_rows = []
         g = primary.settlements.merge(geo_attr, on="id", how="left")
         for s in refs:
@@ -266,18 +300,20 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                 sub_rows.append({"Demand case": CASE_STUDY_NAME.get(s.demand_case, s.demand_case), "Area": label,
                                  **{k: v for k, v in st.items() if k != "mix_pop_2040"}})
         srd = pd.DataFrame(sub_rows)
-        T["t82"] = table_html(srd, {"settlements": F_INT, "people_2040": F_INT, "electrified_start_settlements": F_INT, "new_connections_cum": F_INT,
-                                    "investment_musd_cum": F_2, "usd_per_new_connection": F_INT, "lcoe_energy_w": F_LCOE, "grid_share_2040": F_PCT},
-                              index=False, caption="Table 8.2. Settlements inside the affected localities and protected areas, per demand case",
-                              col_labels={"settlements": "Settlements", "people_2040": "People 2040", "electrified_start_settlements": "Grid-connected 2025",
-                                          "new_connections_cum": "New connections", "investment_musd_cum": "Investment (million USD)",
-                                          "usd_per_new_connection": "USD per person", "lcoe_energy_w": "LCOE (USD/kWh)", "grid_share_2040": "Grid share 2040"})
+        T["t82"] = table_html(srd, corridor_formats, index=False,
+                              caption="Table 8.2. Settlements inside the affected localities and protected areas, per demand case",
+                              col_labels=corridor_labels)
         c10 = M.corridor_table(primary.settlements, geo_attr, corridor_km)
+        already = 1 - c10["people_newly_electrified_2040"] / c10["people_2040"] if c10["people_2040"] else 0.0
+        new_mix = {k: v for k, v in c10["mix_pop_2040"].items()}
         corridor_text = (f"Within {corridor_km} km of the planned Linsan to Manantali 225 kV line the batch holds {c10['settlements']:,} settlements "
-                         f"with {MS.fmt_people(c10['people_2040'])} people in 2040, of which {c10['electrified_start_settlements']:,} settlements were "
-                         f"grid-connected in 2025. In the {CASE_STUDY_NAME.get(primary.demand_case)} case the least-cost mix there connects "
-                         f"{MS.fmt_pct(c10['grid_share_2040'])} of these people through the grid at a delivered cost of {MS.fmt_lcoe(c10['lcoe_energy_w'])} "
-                         f"and {MS.fmt_usd(c10['usd_per_new_connection'])} per newly connected person. Tables 8.1 and 8.2 give the same metrics for "
+                         f"with {MS.fmt_people(c10['people_2040'])} people in {yr_end}. {MS.fmt_pct(already)} of those people live in the "
+                         f"{c10['electrified_start_settlements']:,} settlements that were already grid-connected in {yr_start} (the towns along the line), "
+                         f"so the comparison that matters is the {MS.fmt_people(c10['people_newly_electrified_2040'])} people in newly electrified settlements. "
+                         f"In the {CASE_STUDY_NAME.get(primary.demand_case)} case the least-cost mix reaches {MS.fmt_pct(c10['grid_share_newly_electrified'])} of them "
+                         f"by grid extension and the rest by decentralised systems, at a delivered cost of {MS.fmt_lcoe(c10['lcoe_energy_w_excl_dens'])} "
+                         f"for the newly electrified settlements ({MS.fmt_lcoe(c10['lcoe_energy_w'])} over all corridor settlements, where the towns are costed at the "
+                         f"generation price) and {MS.fmt_usd(c10['usd_per_new_connection'])} per newly connected person. Tables 8.1 and 8.2 give the same metrics for "
                          f"5 and 25 km corridors, for the five localities named as affected, for the Moyen-Bafing park and for the protected areas the line crosses.")
         corridor_note = ("The corridor is measured from the Linsan to Manantali feature only; the second feature of the layer (Maneah to Grandes Chutes) "
                          "runs beside Conakry and would add the capital's population. The planned-grid layer used by the model is a copy of the existing "
@@ -303,14 +339,18 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     T["t92"] = table_html(pd.DataFrame(sw_rows), {"Switched settlements": F_INT, "Switched people": F_INT, "Grid cost (USD/kWh)": "{:.3f}"}, index=False,
                           caption=f"Table 9.2. Settlements whose least-cost technology differs from the reference ({REFERENCE_COST} USD/kWh) in 2040")
     dd = []
+    metric_fmt = {"investment_musd_cum": F_1, "capacity_mw_cum": F_1, "people_reached_cum": F_INT, "usd_per_new_connection": F_INT,
+                  "lcoe_energy_w": F_LCOE, "lcoe_energy_w_excl_dens": F_LCOE, "grid_share_2040": F_PCT}
     for variant, d in deltas_df.items():
         base = dict(DEMAND_VARIANTS)[variant]
         for r in d.itertuples():
+            f = metric_fmt.get(r.metric, F_2)
             dd.append({"Variant": f"{CASE_STUDY_NAME.get(variant)} vs {CASE_STUDY_NAME.get(base)}", "Metric": METRIC_LABELS.get(r.metric, r.metric),
-                       "Base": r.base, "Variant value": r.variant, "Change": r.delta_abs, "Change (%)": r.delta_pct})
-    T["t93"] = table_html(pd.DataFrame(dd) if dd else pd.DataFrame([{"Variant": "none", "Metric": "", "Base": 0, "Variant value": 0, "Change": 0, "Change (%)": 0}]),
-                          {"Base": F_2, "Variant value": F_2, "Change": F_2, "Change (%)": "{:+.1f}"}, index=False,
-                          caption="Table 9.3. Demand variants against their base case at the reference grid cost")
+                       "Base": f.format(r.base), "Variant value": f.format(r.variant),
+                       "Change": ("{:+.1%}" if f == F_PCT else "{:+,.3f}" if f == F_LCOE else "{:+,.1f}" if f == F_1 else "{:+,.0f}").format(r.delta_abs),
+                       "Change (%)": f"{r.delta_pct:+.1f}"})
+    T["t93"] = table_html(pd.DataFrame(dd) if dd else pd.DataFrame([{"Variant": "none", "Metric": "", "Base": "", "Variant value": "", "Change": "", "Change (%)": ""}]),
+                          index=False, caption="Table 9.3. Demand variants against their base case at the reference grid cost")
     T["a1"] = table_html(pd.DataFrame([{"Scenario id": s["id"], "Demand case": s["demand_case"], "Overrides": json.dumps(s["overrides"]),
                                         "Legacy run": s.get("legacy_name") or ""} for s in batch.control.get("scenarios", [])]),
                          index=False, caption="Table A.1. Scenario overrides in the control file")
@@ -347,10 +387,12 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
         fid = f"fig-{num.replace('.', '-')}"
         fig = F.stacked_by_tech(long, col, title, ytitle, x_order)
         figs["ch4"].append({"id": fid, "num": num, "div": F.fig_to_div(fig, fid), "caption": cap, "source": src_ref})
-    hist = pd.concat([M.lcoe_histogram(s.settlements, 2040).assign(demand_case=s.demand_case) for s in refs])
-    figs["f46"] = {"div": F.fig_to_div(F.lcoe_histograms(hist, "Delivered LCOE distribution, 2040"), "fig-4-6"),
-                   "caption": "Population-weighted distribution of the delivered LCOE of the chosen technology in 2040, per demand case (0.005 USD/kWh bins).",
-                   "source": f"MinimumOverallLCOE2040 and Pop2040 of the reference Results files; {src_ref}"}
+    hist = pd.concat([M.lcoe_histogram(s.settlements, 2040, newly_electrified_only=True).assign(demand_case=s.demand_case) for s in refs])
+    figs["f46"] = {"div": F.fig_to_div(F.lcoe_histograms(hist, "Delivered LCOE distribution of the newly electrified settlements, 2040"), "fig-4-6"),
+                   "caption": ("Population-weighted distribution of the delivered LCOE of the chosen technology in 2040 for the newly electrified "
+                               "settlements (ElecStart 0), per demand case, in 0.005 USD/kWh bins; the diamond at the right end holds everyone above "
+                               "0.60 USD/kWh. Settlements already on the grid are excluded because their LCOE equals the generation cost by construction."),
+                   "source": f"MinimumOverallLCOE2040, Pop2040 and ElecStart of the reference Results files; {src_ref}"}
     gm = pd.DataFrame([{"demand_case": c, **{k: H[c][k] for k in ("usd_per_new_connection", "people_per_musd", "lcoe_energy_w")}} for c in H])
     figs["f51"] = {"div": F.fig_to_div(F.grouped_metric_bars(gm, ["usd_per_new_connection", "people_per_musd", "lcoe_energy_w"],
                                                               ["USD per newly connected person", "People per million USD", "Delivered LCOE 2040 (USD/kWh)"], x_order),
@@ -404,9 +446,11 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
             else:
                 maps_ctx[key] = entry
             log(f"map {mid}: {len(png) / 1e6:.2f} MB")
-        src = lambda s, cols: f"{s.scenario_id} Results file ({cols}); GADM 4.1 boundaries; existing HV and planned Koukoutamba lines from the study GIS inputs; batch {batch.name}; built {stamp}"
-        add("map31", MP.status_map(primary.settlements, layers, "Electrification status in the start year", src(primary, "X_deg, Y_deg, ElecStart, PopStartYear"), dpi=map_dpi),
-            "Start-year electrification status after calibration.", src(primary, "X_deg, Y_deg, ElecStart, PopStartYear"), "map-3-1", "3.1", "Start-year electrification status map")
+        def src(s, cols, kkt=True):
+            lines = "existing HV and planned Koukoutamba lines" if kkt else "existing HV lines"
+            return f"{s.scenario_id} Results file ({cols}); GADM 4.1 boundaries; {lines} from the study GIS inputs; batch {batch.name}; built {stamp}"
+        add("map31", MP.status_map(primary.settlements, layers, "Electrification status in the start year", src(primary, "X_deg, Y_deg, ElecStart, PopStartYear", kkt=False), dpi=map_dpi),
+            "Start-year electrification status after calibration.", src(primary, "X_deg, Y_deg, ElecStart, PopStartYear", kkt=False), "map-3-1", "3.1", "Start-year electrification status map")
         for i, s in enumerate(refs):
             nm = CASE_STUDY_NAME.get(s.demand_case, s.demand_case)
             png = MP.technology_map(s.settlements, 2040, layers, "Least-cost technology, 2040",
@@ -438,12 +482,15 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     # --- texts ------------------------------------------------------------------------
     hp = H[primary.demand_case]
     st_tot = start.loc["Total"]
+    cost_desc = ", ".join(f"{c} ({COST_ROLE.get(c, 'other')})" for c in cost_levels)
     texts = {
-        "scope_text": (f"The batch holds {len(batch.scenarios)} scenarios: five demand cases at the reference grid generation cost of {REFERENCE_COST} USD/kWh, "
-                       f"and the three Table 1 cases at {', '.join(str(c) for c in COST_LEVELS if c != REFERENCE_COST)} USD/kWh. Every scenario runs on the same "
-                       f"calibrated input of {n_settlements:,} settlements, the same 127,000 grid connections and 90 MW per year to 2030, an 8 percent discount rate "
-                       f"and universal access in 2040 with a 70 percent interim target in 2030. Demand cases differ only through the residential tiers; the bottom-up case "
-                       f"assigns a custom tier per settlement from GDP-PPP and poverty."),
+        "scope_text": (f"The batch holds {len(batch.scenarios)} scenarios: {len(refs)} demand cases at the reference grid generation cost of {REFERENCE_COST} USD/kWh, "
+                       f"and the Table 1 cases at {', '.join(str(c) for c in cost_levels if c != REFERENCE_COST)} USD/kWh. Every scenario runs on the same "
+                       f"calibrated input of {n_settlements:,} settlements, the same {cap_conn:,},000 grid connections and {cap_mw} MW per year to {yr_mid}, "
+                       f"a {disc * 100:.0f} percent discount rate and universal access in {yr_end} with a {target_mid * 100:.0f} percent interim target in {yr_mid}. "
+                       f"Demand cases differ only through the residential tiers; the bottom-up case assigns a custom tier per settlement from GDP-PPP and poverty. "
+                       f"The urban tier applies to the {n_urban} settlements the model classes as urban ({MS.fmt_people(urban_people)} people in {yr_end}), "
+                       f"so the two top-down variants that change only the urban tier move demand and investment in those settlements alone."),
         "access_text": (f"After calibration to the national statistics, {MS.fmt_pct(st_tot['access_rate_start'])} of the {MS.fmt_people(st_tot['pop_start'])} people "
                         f"of 2025 live in settlements classed as electrified, in {int(st_tot['electrified_settlements']):,} of {int(st_tot['settlements']):,} settlements. "
                         f"Table 3.1 gives the regional picture; Table 3.2 lists the settlements that no scenario of the batch reaches with the grid by 2040, which are the "
@@ -467,10 +514,12 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                          f"{MS.fmt_musd(hp['investment_musd_2030'])}, leaving {MS.fmt_people(hp['unserved_2030'])} people for the second period, which costs "
                          f"{MS.fmt_musd(hp['investment_musd_2040'])}. Table 7.1 gives the phasing by technology, Table 7.1b by region, and the two-panel maps show "
                          f"where the 2030 and 2040 frontiers fall."),
-        "sensitivity_text": (f"The grid generation cost sweeps from the legacy 0.047 to 0.078 (low variant), {REFERENCE_COST} (reference) and 0.22 USD/kWh (high variant, about the "
-                             f"unsubsidised production cost) for the three Table 1 cases. Figures 9.1 to 9.4 trace the headline metrics, Table 9.1 isolates grid extension, "
+        "sensitivity_text": (f"The grid generation cost sweeps over {cost_desc} USD/kWh for the Table 1 cases; "
+                             f"{hi_cost} USD/kWh is close to the unsubsidised production cost. Figures 9.1 to 9.4 trace the headline metrics, Table 9.1 isolates grid extension, "
                              f"which is the quantity that moves, and Table 9.2 and Figure 9.5 show which settlements switch and where they go. The demand variants "
-                             f"({CASE_STUDY_NAME.get('TD_Low_minus')} and {CASE_STUDY_NAME.get('TD_High_plus')}) are compared with their base case in Table 9.3."),
+                             f"({CASE_STUDY_NAME.get('TD_Low_minus')} and {CASE_STUDY_NAME.get('TD_High_plus')}) are compared with their base case in Table 9.3; "
+                             f"{CASE_STUDY_NAME.get('TD_High_plus')} raises the urban tier only, which reaches the {n_urban} urban settlements and leaves the "
+                             f"technology mix, the hydro sites and the cost of the newly electrified settlements unchanged."),
     }
     rules = ["Hydro mini-grids are only viable within 10 km of a hydro site: hard-coded in the model (max_hydro_dist) and recorded in every manifest.",
              "Mini-hydro sites above 1 MW are excluded upstream: the extraction used a layer filtered at 1 MW or below, so the hydro potential column holds 0 to 1,000 kW.",
@@ -479,8 +528,11 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     caveats = ["The planned-HV layer used in the extraction is a copy of the existing network (PlannedHVLineDist equals CurrentHVLineDist everywhere), so the planned Koukoutamba line was never part of the model's grid. Chapter 8 measures the corridor from the line layer directly.",
                "The delivered LCOE of settlements already on the grid equals the grid generation cost by construction; national LCOE averages therefore track the cost input. Chapter 5 reports the newly electrified settlements separately.",
                "In 2030 the model leaves 30 percent of the population unserved by design (interim target); 2030 totals in the Summaries files count those people under 'Not yet electrified', and all per-connection metrics here use served settlements only.",
-               "The five earlier runs listed in Table 2.4 were computed on the extraction from before the fix of 20 October 2026 and are superseded by this batch.",
-               "Population, urban ratio and electrification rates follow the calibration block (Table 2.3); the 2040 urban ratio of 45 percent is a working assumption to confirm."]
+               "The earlier runs listed in Table 2.4 are superseded by this batch (the control file records why).",
+               f"Population, urban ratio and electrification rates follow the calibration block (Table 2.3); the {yr_end} urban ratio of "
+               f"{cal.get('urban_ratio_end_year', 0.45) * 100:.0f} percent is a working assumption to confirm.",
+               f"Only {n_urban} settlements are classed as urban ({MS.fmt_people(urban_people)} people in {yr_end}); the urban tier therefore acts on those "
+               f"settlements alone, and the urban and rural split of Table 4.3 compares those {n_urban} settlements with the rest of the country."]
     model_says = ["Where each technology is least cost at settlement level, for five demand cases and four grid costs (chapters 4 and 9).",
                   "The three comparison metrics by technology, region and urban or rural area (chapter 5), and the settlements never reached by the grid (chapter 3).",
                   "The phasing of connections, capacity and investment between 2030 and 2040 (chapter 7).",

@@ -99,8 +99,9 @@ def test_region_urban_rural_and_hydro_tables():
     assert u.loc["Urban", "usd_per_new_connection"] == pytest.approx(3e6 / 300)
     assert u.loc["Rural", "new_connections_cum"] == 1370
     h = M.hydro_table(df, 2040)
-    assert h == {"sites": 1, "settlements": 1, "people": 120, "capacity_mw": pytest.approx(0.002),
-                 "investment_musd": pytest.approx(0.02), "mean_dist_km": 3.0}
+    assert {k: h[k] for k in ("sites", "settlements", "people", "mean_dist_km")} == \
+        {"sites": 1, "settlements": 1, "people": 120, "mean_dist_km": 3.0}
+    assert h["capacity_mw"] == pytest.approx(0.002) and h["investment_musd"] == pytest.approx(0.02)
 
 
 def test_start_year_and_phasing_tables():

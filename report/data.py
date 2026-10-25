@@ -229,6 +229,12 @@ def check_consistency(batch: Batch, atol_people: float = 1.0, atol_musd: float =
         for year in YEARS:
             code = df[f"FinalElecCode{year}"]
             served = code < 99
+            # Guard: the report's served mask also requires NewConnections > 0. The summary
+            # files do not, so the two definitions coincide only when no such row exists.
+            n_zero = int((served & (df[f"NewConnections{year}"] <= 0)).sum())
+            rows.append({"scenario_id": sid, "technology": "all", "year": year,
+                         "metric": "served_rows_without_connections", "settlements": float(n_zero),
+                         "summary": 0.0, "ok": n_zero == 0})
             for key, c in KEY_TO_CODE.items():
                 sel = code == c
                 if key == "Non-electrified" and year == 2040:

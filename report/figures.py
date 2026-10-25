@@ -29,7 +29,7 @@ def stacked_by_tech(long_df: pd.DataFrame, value_col: str, title: str, y_title: 
     """Two panels (2030 | 2040), x = demand case, one stacked bar trace per technology."""
     fig = make_subplots(rows=1, cols=len(years), subplot_titles=[str(y) for y in years], shared_yaxes=True,
                         horizontal_spacing=0.06)
-    codes = [c for c in TECH_ORDER if (long_df[code_col] == c).any()]
+    codes = [c for c in TECH_ORDER if (long_df.loc[long_df[code_col] == c, value_col].abs() > 0).any()]
     for j, year in enumerate(years, start=1):
         sub = long_df[long_df["year"] == year]
         for c in codes:
@@ -95,17 +95,25 @@ def shares_vs_cost(long_df: pd.DataFrame, cases: list, title: str = "") -> go.Fi
     return _apply(fig, title, height=460)
 
 
-def lcoe_histograms(hist_long: pd.DataFrame, title: str = "") -> go.Figure:
+def lcoe_histograms(hist_long: pd.DataFrame, title: str = "", log_y: bool = False) -> go.Figure:
     """Population-weighted LCOE distributions, one step line per demand case.
-    hist_long columns: demand_case, bin_left, people."""
+    hist_long columns: demand_case, bin_left, bin_right, people, overflow. The overflow bin
+    (everything above the last regular edge) is drawn as a marker at its left edge."""
     fig = go.Figure()
     for case, sub in hist_long.groupby("demand_case", sort=False):
         sub = sub.sort_values("bin_left")
-        fig.add_trace(go.Scatter(x=sub["bin_left"], y=sub["people"], mode="lines", line_shape="hv",
-                                 name=_case_label(case), line=dict(color=CASE_COLOUR.get(case, ACCENT), width=2),
+        regular = sub[~sub.get("overflow", False).astype(bool)] if "overflow" in sub else sub
+        colour = CASE_COLOUR.get(case, ACCENT)
+        fig.add_trace(go.Scatter(x=regular["bin_left"], y=regular["people"], mode="lines", line_shape="hv",
+                                 name=_case_label(case), line=dict(color=colour, width=2), legendgroup=case,
                                  hovertemplate=f"{_case_label(case)}<br>%{{x:.3f}} USD/kWh: %{{y:,.0f}} people<extra></extra>"))
+        if "overflow" in sub and sub["overflow"].astype(bool).any():
+            o = sub[sub["overflow"].astype(bool)].iloc[-1]
+            fig.add_trace(go.Scatter(x=[o["bin_left"]], y=[o["people"]], mode="markers", marker=dict(color=colour, size=10, symbol="diamond"),
+                                     name=f"{_case_label(case)}, above {o['bin_left']:.2f}", legendgroup=case, showlegend=False,
+                                     hovertemplate=f"{_case_label(case)}<br>above %{{x:.2f}} USD/kWh: %{{y:,.0f}} people<extra></extra>"))
     fig.update_xaxes(title_text="Delivered LCOE (USD/kWh)", tickformat=".2f")
-    fig.update_yaxes(title_text="People (2040)", tickformat=",.0f")
+    fig.update_yaxes(title_text="People (2040)", tickformat=",.0f", type="log" if log_y else "linear")
     return _apply(fig, title, height=420)
 
 

@@ -32,11 +32,13 @@ def fmt_cell(value, spec: str | None) -> str:
 
 def table_html(df: pd.DataFrame, formats: dict | None = None, index: bool = True, caption: str | None = None,
                css_class: str = "data", index_label: str = "", col_labels: dict | None = None,
-               table_id: str | None = None) -> str:
+               table_id: str | None = None, total_rows=None) -> str:
     """A compact HTML table. formats maps column name to a format string ('{:,.0f}');
-    col_labels maps column name to a display label."""
+    col_labels maps column name to a display label; total_rows lists the index labels
+    rendered as totals (bold), nothing else is."""
     formats = formats or {}
     col_labels = col_labels or {}
+    total_rows = set(total_rows or [])
     cols = list(df.columns)
     parts = [f'<table class="{css_class}"' + (f' id="{table_id}"' if table_id else "") + ">"]
     if caption:
@@ -48,7 +50,8 @@ def table_html(df: pd.DataFrame, formats: dict | None = None, index: bool = True
         parts.append(f"<th>{_html.escape(str(col_labels.get(c, c)))}</th>")
     parts.append("</tr></thead><tbody>")
     for idx, row in df.iterrows():
-        parts.append("<tr>")
+        key = idx if not isinstance(idx, tuple) else idx[-1]
+        parts.append('<tr class="total">' if key in total_rows else "<tr>")
         if index:
             parts.append(f"<th>{fmt_cell(idx if not isinstance(idx, tuple) else ' / '.join(map(str, idx)), None)}</th>")
         for c in cols:
