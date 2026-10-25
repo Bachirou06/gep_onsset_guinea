@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title | e }}</title>
+<style>{{ css }}</style>
+<script>{{ plotly_js }}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+  {% for anchor, label in chapters %}
+    <li><a href="#{{ anchor }}">{{ label | e }}</a></li>
+  {% endfor %}
+  </ol>
+</nav>
+<main>
+<header class="title">
+  <h1>{{ title | e }}</h1>
+  <p class="sub">{{ subtitle | e }}</p>
+</header>
+
+<div class="provenance">
+  <strong>Provenance.</strong> Every figure and table below is computed from the per-settlement results of one model batch; the identifiers let anyone rebuild it.
+  <dl>
+    <dt>Batch</dt><dd>{{ prov.batch | e }} ({{ prov.n_scenarios }} scenarios, model time {{ prov.model_seconds_min }} min, {{ prov.started | e }} to {{ prov.finished | e }})</dd>
+    <dt>Calibrated input</dt><dd>{{ prov.calibrated_csv | join(', ') | e }} sha256 {{ prov.calibrated_csv_sha256 }}</dd>
+    <dt>Control file</dt><dd>{{ prov.control_file | join(', ') | e }} sha256 {{ prov.control_file_sha256 }}</dd>
+    <dt>Model code (git)</dt><dd>{{ prov.git_commits | join(', ') }}{% if prov.git_dirty_any %} (working tree not clean when the batch ran){% endif %}</dd>
+    <dt>Report code (git)</dt><dd>{{ build.report_commit }}{% if build.report_dirty %} (working tree not clean){% endif %}</dd>
+    <dt>Built</dt><dd>{{ build.timestamp }} with Python {{ build.python }}, pandas {{ build.pandas }}, plotly {{ build.plotly }}, geopandas {{ build.geopandas }}, matplotlib {{ build.matplotlib }}</dd>
+    <dt>Consistency check</dt><dd>{{ build.consistency | e }} (per-settlement aggregates against comparison_summary.csv)</dd>
+    {% if build.sample %}<dt>Sample build</dt><dd>restricted to {{ build.n_settlements }} settlements; national figures are not meaningful</dd>{% endif %}
+  </dl>
+</div>
+
+{# ---------------------------------------------------------------- 1 #}
+<section class="chapter" id="key-messages">
+<h2>1. Key messages</h2>
+<p class="objective">Informs every objective of the study. Each sentence is generated from the tables it cites.</p>
+<div class="kpi-row">
+{% for k in kpis %}
+  <div class="kpi"><div class="case">{{ k.study_name | e }}</div><div class="desc">{{ k.description | e }}</div>
+  <div class="val">People reached 2025 to 2040<br><b>{{ k.people }}</b></div>
+  <div class="val">Cumulative investment<br><b>{{ k.investment }}</b></div>
+  <div class="val">Per newly connected person<br><b>{{ k.usd_per_connection }}</b></div>
+  <div class="val">Delivered LCOE 2040<br><b>{{ k.lcoe }}</b></div></div>
+{% endfor %}
+</div>
+<ul class="key-messages">
+{% for m in key_messages %}
+  <li class="key-message" id="{{ m.id }}">{{ m.text | e }}<span class="src">Source: {{ m.source | e }}</span></li>
+{% endfor %}
+</ul>
+</section>
+
+{# ---------------------------------------------------------------- 2 #}
+<section class="chapter" id="scope">
+<h2>2. Scope, scenarios, data and caveats</h2>
+<p class="objective">Method transparency: the tool, data and assumptions are open, so every result can be traced, reproduced and challenged.</p>
+<p>{{ scope_text | e }}</p>
+<div class="table-wrap">{{ tables.t21 }}</div>
+<div class="table-wrap">{{ tables.t22 }}</div>
+<div class="table-wrap">{{ tables.t23 }}</div>
+<div class="table-wrap">{{ tables.t24 }}</div>
+<h3>Rules that are not levers</h3>
+<ul>
+{% for c in rules %}<li>{{ c | e }}</li>{% endfor %}
+</ul>
+<h3>Caveats</h3>
+{% for c in caveats %}<div class="caveat">{{ c | e }}</div>{% endfor %}
+</section>
+
+{# ---------------------------------------------------------------- 3 #}
+<section class="chapter" id="access-today">
+<h2>3. Energy access today and the un-served</h2>
+<p class="objective">Objective 1: assess the current situation of energy access, focusing on communities unlikely to be grid-connected soon.</p>
+<p>{{ access_text | e }}</p>
+<div class="table-wrap">{{ tables.t31 }}</div>
+{% if maps.map31 %}<figure id="map-3-1"><img src="{{ maps.map31.uri }}" alt="Start-year electrification status map"><figcaption><b>Figure 3.1.</b> Start-year (2025) electrification status of the {{ n_settlements }} settlements after calibration.</figcaption><p class="source">Source: {{ maps.map31.source | e }}</p></figure>{% endif %}
+<div class="table-wrap">{{ tables.t32 }}</div>
+<p class="note">Table 3.2 lists the settlements that no scenario of the batch connects to the grid by 2040: the communities for which decentralised options are the only route to access in every demand and cost case.</p>
+</section>
+
+{# ---------------------------------------------------------------- 4 #}
+<section class="chapter" id="reference">
+<h2>4. Least-cost options at the reference grid cost</h2>
+<p class="objective">Objectives 2 and 3: the best electrification options for un-served areas, and the contribution of household solar and solar/hybrid mini-grids for household and productive uses. All five demand cases at {{ reference_cost }} USD/kWh.</p>
+<p>{{ reference_text | e }}</p>
+{% for f in figs.ch4 %}
+<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
+{% endfor %}
+<div class="table-wrap">{{ tables.t41 }}</div>
+{% for m in maps.ch4 %}
+<figure id="{{ m.id }}"><img src="{{ m.uri }}" alt="{{ m.alt | e }}"><figcaption><b>Figure {{ m.num }}.</b> {{ m.caption | e }}</figcaption><p class="source">Source: {{ m.source | e }}</p></figure>
+{% endfor %}
+<div class="table-wrap">{{ tables.t42 }}</div>
+<div class="table-wrap">{{ tables.t42b }}</div>
+<div class="table-wrap">{{ tables.t43 }}</div>
+<figure id="fig-4-6">{{ figs.f46.div }}<figcaption><b>Figure 4.6.</b> {{ figs.f46.caption | e }}</figcaption><p class="source">Source: {{ figs.f46.source | e }}</p></figure>
+</section>
+
+{# ---------------------------------------------------------------- 5 #}
+<section class="chapter" id="metrics">
+<h2>5. The three study metrics</h2>
+<p class="objective">Objective 6 and the proposal's comparison metrics: delivered cost of electricity, capital cost per new connection and people reached per million USD, by technology and demand case, as the basis for the comparison with grid extension and utility-scale generation.</p>
+<p>{{ metrics_text | e }}</p>
+<figure id="fig-5-1">{{ figs.f51.div }}<figcaption><b>Figure 5.1.</b> {{ figs.f51.caption | e }}</figcaption><p class="source">Source: {{ figs.f51.source | e }}</p></figure>
+<div class="table-wrap">{{ tables.t51 }}</div>
+<div class="table-wrap">{{ tables.t52 }}</div>
+<div class="table-wrap">{{ tables.t53 }}</div>
+<p class="note">{{ lcoe_note | e }}</p>
+<div class="table-wrap">{{ tables.t54 }}</div>
+</section>
+
+{# ---------------------------------------------------------------- 6 #}
+<section class="chapter" id="hydro">
+<h2>6. Hydro mini-grids</h2>
+<p class="objective">Objective 5: technical and economic feasibility of micro-hydro and mini-grid hydro in suitable regions (indicative, from the small-hydro potential layer).</p>
+<p>{{ hydro_text | e }}</p>
+<div class="table-wrap">{{ tables.t61 }}</div>
+{% if maps.map61 %}<figure id="map-6-1"><img src="{{ maps.map61.uri }}" alt="Hydro mini-grid sites map"><figcaption><b>Figure 6.1.</b> {{ maps.map61.caption | e }}</figcaption><p class="source">Source: {{ maps.map61.source | e }}</p></figure>{% endif %}
+</section>
+
+{# ---------------------------------------------------------------- 7 #}
+<section class="chapter" id="roadmap">
+<h2>7. Phased roadmap 2030 and 2040</h2>
+<p class="objective">Deliverable 3: a phased electrification roadmap sequencing technologies by area and time horizon.</p>
+<p>{{ roadmap_text | e }}</p>
+<div class="table-wrap">{{ tables.t71 }}</div>
+<div class="table-wrap">{{ tables.t71b }}</div>
+{% for m in maps.ch7 %}
+<figure id="{{ m.id }}"><img src="{{ m.uri }}" alt="{{ m.alt | e }}"><figcaption><b>Figure {{ m.num }}.</b> {{ m.caption | e }}</figcaption><p class="source">Source: {{ m.source | e }}</p></figure>
+{% endfor %}
+<figure id="fig-7-2">{{ figs.f72.div }}<figcaption><b>Figure 7.2.</b> {{ figs.f72.caption | e }}</figcaption><p class="source">Source: {{ figs.f72.source | e }}</p></figure>
+</section>
+
+{# ---------------------------------------------------------------- 8 #}
+<section class="chapter" id="corridor">
+<h2>8. Koukoutamba corridor and protected areas</h2>
+<p class="objective">Objective 4 (preparatory): the settlements the planned Koukoutamba transmission line would pass, and the protected areas and localities it affects, under the least-cost results of this batch. The paired with and without Koukoutamba scenario is a separate modelling step.</p>
+{% if corridor %}
+<p>{{ corridor_text | e }}</p>
+<div class="table-wrap">{{ tables.t81 }}</div>
+<div class="table-wrap">{{ tables.t82 }}</div>
+{% if maps.map81 %}<figure id="map-8-1"><img src="{{ maps.map81.uri }}" alt="Koukoutamba corridor map"><figcaption><b>Figure 8.1.</b> {{ maps.map81.caption | e }}</figcaption><p class="source">Source: {{ maps.map81.source | e }}</p></figure>{% endif %}
+<p class="note">{{ corridor_note | e }}</p>
+{% else %}
+<p class="note">Built without the GIS layers; the corridor tables and map are omitted.</p>
+{% endif %}
+</section>
+
+{# ---------------------------------------------------------------- 9 #}
+<section class="chapter" id="sensitivity">
+<h2>9. Sensitivity analysis</h2>
+<p class="objective">Objective 6 (risks): how the results move with the grid generation cost, from the legacy 0.047 to the unsubsidised 0.22 USD/kWh, and with the demand tiers.</p>
+<p>{{ sensitivity_text | e }}</p>
+{% for f in figs.ch9 %}
+<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
+{% endfor %}
+<div class="table-wrap">{{ tables.t91 }}</div>
+<div class="table-wrap">{{ tables.t92 }}</div>
+{% if maps.map96 %}<figure id="map-9-6"><img src="{{ maps.map96.uri }}" alt="Technology switch map"><figcaption><b>Figure 9.6.</b> {{ maps.map96.caption | e }}</figcaption><p class="source">Source: {{ maps.map96.source | e }}</p></figure>{% endif %}
+<h3>Demand variants</h3>
+<div class="table-wrap">{{ tables.t93 }}</div>
+{% for f in figs.ch9b %}
+<figure id="{{ f.id }}">{{ f.div }}<figcaption><b>Figure {{ f.num }}.</b> {{ f.caption | e }}</figcaption><p class="source">Source: {{ f.source | e }}</p></figure>
+{% endfor %}
+</section>
+
+{# ---------------------------------------------------------------- 10 #}
+<section class="chapter" id="limits">
+<h2>10. What the model does and does not say</h2>
+<p class="objective">Objectives 7 and 8: evidence this report supplies for the barrier and policy chapters, and what lies outside the model.</p>
+<h3>Evidence the model supplies</h3>
+<ul>{% for c in model_says %}<li>{{ c | e }}</li>{% endfor %}</ul>
+<h3>Outside the model</h3>
+<ul>{% for c in model_does_not_say %}<li>{{ c | e }}</li>{% endfor %}</ul>
+</section>
+
+{# ---------------------------------------------------------------- 11 #}
+<section class="chapter" id="annex">
+<h2>11. Annex</h2>
+<div class="table-wrap">{{ tables.a1 }}</div>
+<div class="table-wrap">{{ tables.a2 }}</div>
+<div class="table-wrap">{{ tables.a3 }}</div>
+<h3>Scenario summary tables</h3>
+{% for s in summaries %}
+<details><summary>{{ s.id | e }}: {{ s.label | e }}</summary><div class="table-wrap">{{ s.html }}</div></details>
+{% endfor %}
+<h3>Glossary</h3>
+<div class="table-wrap">{{ tables.glossary }}</div>
+<h3>Method notes</h3>
+<ul>{% for c in method_notes %}<li>{{ c | e }}</li>{% endfor %}</ul>
+<details><summary>batch_log.txt</summary><pre>{{ batch_log | e }}</pre></details>
+<details><summary>CHECKS.md</summary><pre>{{ checks_md | e }}</pre></details>
+</section>
+</main>
+</div>
+</body>
+</html>

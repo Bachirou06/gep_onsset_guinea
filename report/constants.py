@@ -7,7 +7,7 @@ TECH = {
     3: ("SA_PV", "Stand-alone PV", "#E69F00", "Stand-alone"),
     5: ("MG_PV_Battery", "Mini-grid PV with battery", "#009E73", "Mini-grid"),
     7: ("MG_Hydro", "Mini-grid hydro", "#CC79A7", "Mini-grid"),
-    99: ("Non-electrified", "Not yet electrified", "#BBBBBB", "None"),
+    99: ("Non-electrified", "Not yet electrified", "#BBBBBB", "Unserved"),
 }
 TECH_ORDER = [1, 2, 5, 7, 3, 99]                 # stacking order: grid, mini-grids, stand-alone, none
 SERVED_CODES = [1, 2, 3, 5, 7]
@@ -18,7 +18,7 @@ TECH_LABEL = {code: v[1] for code, v in TECH.items()}
 TECH_COLOUR = {code: v[2] for code, v in TECH.items()}
 TECH_CATEGORY = {code: v[3] for code, v in TECH.items()}
 KEY_TO_CODE = {v[0]: code for code, v in TECH.items()}
-CATEGORY_COLOURS = {"Grid": "#0072B2", "Mini-grid": "#009E73", "Stand-alone": "#E69F00", "None": "#BBBBBB"}
+CATEGORY_COLOURS = {"Grid": "#0072B2", "Mini-grid": "#009E73", "Stand-alone": "#E69F00", "Unserved": "#BBBBBB"}
 
 # Demand cases: (demand_case, study name, description, line colour), display order.
 DEMAND_CASES = [
