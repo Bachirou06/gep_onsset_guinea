@@ -66,9 +66,12 @@ def _tech_rows_table(by_case: dict, column: str, fmt: str, caption: str, index_l
     return table_html(frame, {c: fmt for c in frame.columns}, caption=caption, index_label=index_label)
 
 
+DEFAULT_MAP_COLOURS = 96     # palette quantisation of the map PNGs; six technology colours plus greys lose nothing
+
+
 def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, maps=True, geo=True,
-          corridor_km=10, map_dpi=150, map_colours=0, sample=False, use_cache=True, allow_inconsistent=False,
-          log=print) -> Path:
+          corridor_km=10, map_dpi=150, map_colours=DEFAULT_MAP_COLOURS, sample=False, use_cache=True,
+          allow_inconsistent=False, log=print) -> Path:
     t0 = time.time()
     batch_dir = Path(batch_dir)
     repo_root = Path(repo_root)
@@ -538,7 +541,8 @@ def main(argv=None) -> int:
     ap.add_argument("--no-geo", action="store_true")
     ap.add_argument("--corridor-km", type=float, default=10)
     ap.add_argument("--map-dpi", type=int, default=150)
-    ap.add_argument("--map-colours", type=int, default=0, help="palette-quantise map PNGs to this many colours (0 = off)")
+    ap.add_argument("--map-colours", type=int, default=DEFAULT_MAP_COLOURS,
+                    help="palette-quantise map PNGs to this many colours (0 = off)")
     ap.add_argument("--sample", type=int, default=0, help="build on a random sample of N settlements (seed 42), for checks")
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--allow-inconsistent", action="store_true")

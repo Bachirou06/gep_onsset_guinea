@@ -64,3 +64,34 @@ Tests:
 The five earlier runs named `D2_*` and `D3_*` in the shared folder were produced
 on the extraction from before the fix of 20 October 2026 and are superseded;
 the control file records this in `meta.superseded_runs`.
+
+Building the results report
+---------------------------
+
+`report/` turns a finished batch into one self-contained HTML file (charts in
+Plotly, maps as PNG, every number traceable to the batch, the input hash and
+the code commit), organised by the objectives of the study:
+
+    python -m report.build GuineaRuns/Outputs/2026-10-25_table1 --inputs "GuineaRuns/Inputs/Guinea Data"
+    python -m report.build GuineaRuns/Outputs/2026-10-25_table1 --inputs "GuineaRuns/Inputs/Guinea Data" --sample 500   # quick check
+    python -m report.build GuineaRuns/Outputs/2026-10-25_table1 --no-maps --no-geo                                        # charts and tables only
+
+Output: `GuineaRuns/Outputs/<batch>/report/guinea_scenarios_report_<batch>.html`
+plus `build_manifest.json` (asset sizes, versions, consistency result) and a
+`cache/` of compact per-settlement tables that makes rebuilds fast. Options:
+`--corridor-km` (default 10, measured from the Linsan to Manantali feature of
+the Koukoutamba line), `--map-dpi`, `--map-colours N` (palette-quantise the
+maps to shrink the file), `--no-cache`.
+
+Environment note (October 2026): in the `gep_guinea` environment any
+matplotlib save crashes once a GDAL-based library has been imported (a
+Windows delay-load DLL conflict between the conda-forge builds of matplotlib
+and pyogrio). Until that is resolved, build the report and run the report
+tests with the `OnSSET_SENEGAL` environment (Python 3.10, geopandas 1.1.2,
+plotly 6.5.2), which renders everything; the model itself keeps running in
+`gep_guinea`.
+
+Report tests:
+
+    python -m pytest tests/test_report_*.py          # sample-based, about a minute
+    python -m pytest tests/test_report_build.py -m slow   # full build on the real batch

@@ -83,18 +83,32 @@ def neatline_frame(title: str, subtitle: str, source_note: str, figsize=(10, 8.5
 
 
 def draw_base(ax, layers, extent):
+    from matplotlib import patheffects
     if layers:
         if "adm0" in layers:
             layers["adm0"].plot(ax=ax, facecolor=LAND_COLOUR, edgecolor=TEXT_COLOUR, linewidth=0.9, zorder=1)
         if "adm1" in layers:
             layers["adm1"].boundary.plot(ax=ax, color=BOUNDARY_COLOUR, linewidth=0.5, zorder=2)
+            halo = [patheffects.withStroke(linewidth=2.5, foreground="white")]
             for _, r in layers["adm1"].iterrows():
                 c = r.geometry.representative_point()
-                ax.text(c.x, c.y, str(r.get("NAME_1", "")), fontsize=7.5, color="#555555", ha="center", va="center",
-                        zorder=9, path_effects=None, alpha=0.9)
+                ax.text(c.x, c.y, str(r.get("NAME_1", "")), fontsize=8, color="#4A4A4A", ha="center", va="center",
+                        zorder=9, path_effects=halo)
     ax.set_xlim(extent[0], extent[1])
     ax.set_ylim(extent[2], extent[3])
     ax.set_aspect(1 / np.cos(np.radians(LAT_CENTER)))
+
+
+def _clipped(layers, key):
+    """A network layer clipped to the national boundary (Guinea only on the maps)."""
+    g = layers[key]
+    if "adm0" in layers:
+        try:
+            import geopandas as gpd
+            return gpd.clip(g, layers["adm0"])
+        except Exception:
+            return g
+    return g
 
 
 def draw_network(ax, layers, kkt=True):
@@ -102,15 +116,15 @@ def draw_network(ax, layers, kkt=True):
         return []
     handles = []
     if "hv_existing" in layers:
-        layers["hv_existing"].plot(ax=ax, color=HV_COLOUR, linewidth=1.0, zorder=7)
+        _clipped(layers, "hv_existing").plot(ax=ax, color=HV_COLOUR, linewidth=1.0, zorder=7)
         handles.append(Line2D([0], [0], color=HV_COLOUR, lw=1.2, label="Existing HV line"))
     if kkt and "kkt" in layers:
-        layers["kkt"].plot(ax=ax, color=KKT_COLOUR, linewidth=1.4, linestyle=(0, (4, 2)), zorder=8)
+        _clipped(layers, "kkt").plot(ax=ax, color=KKT_COLOUR, linewidth=1.4, linestyle=(0, (4, 2)), zorder=8)
         handles.append(Line2D([0], [0], color=KKT_COLOUR, lw=1.4, ls=(0, (4, 2)), label="Planned Koukoutamba 225 kV line"))
     return handles
 
 
-def draw_north_arrow(ax, x=0.955, y=0.90, size=0.055):
+def draw_north_arrow(ax, x=0.045, y=0.90, size=0.055):
     """Two-tone kite needle in axes coordinates."""
     t = ax.transAxes
     ax.add_patch(Polygon([[x, y + size], [x - size * 0.3, y - size * 0.35], [x, y - size * 0.1]], closed=True,
