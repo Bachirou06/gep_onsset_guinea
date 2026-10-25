@@ -1,53 +1,32 @@
+"""Single-scenario runs on a 500-settlement sample.
+
+Every model run costs about two minutes whatever the row count: the hybrid
+sizing in hybrids_pv.py and hybrids_wind.py simulates 8,760 hours per size
+combination. Tests therefore share one batch produced once per session
+(fixture shared_batch) and are marked `model`; run them with `pytest -m model`.
+"""
 import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-STUDY = Path(__file__).resolve().parents[1] / "Scenarios" / "guinea_scenarios.json"
+from tests.helpers import QUIET, make_control  # noqa: F401
 
 
-def make_control(gep_path, repo_root, tmp_path, calibrated_csv, scenario_ids):
-    """The study file's defaults and calibration, real profiles and matrix, a sampled
-    calibrated input, outputs under tmp_path, and the requested scenarios only."""
-    import scenario_control
-    doc = json.loads(STUDY.read_text(encoding="utf-8"))
-    base = repo_root / "GuineaRuns" / "Inputs" / "Guinea Data"
-    doc["paths"] = {
-        "raw_input_csv": str(repo_root / "GuineaRuns" / "Inputs" / "OnSSET_InputFile_20261018_100416.csv"),
-        "calibrated_csv": str(calibrated_csv),
-        "pv_profile": str(base / "Solar profile" / "gn-2-pv.csv"),
-        "wind_profile": str(base / "Wind profile" / "gn-2-wind.csv"),
-        "productive_matrix": str(repo_root / "gep_onsset" / "productive_uses_matrix.json"),
-        "output_root": str(tmp_path / "out"),
-    }
-    doc["scenarios"] = [s for s in doc["scenarios"] if s["id"] in scenario_ids]
-    d = tmp_path / "Scenarios"
-    d.mkdir(exist_ok=True)
-    p = d / "control.json"
-    p.write_text(json.dumps(doc), encoding="utf-8")
-    return scenario_control.load_control(p, repo_root=tmp_path, check_paths=True)
-
-
-@pytest.fixture
-def small_control(gep_path, repo_root, sample_calibrated, profiles, tmp_path):
-    return make_control(gep_path, repo_root, tmp_path, sample_calibrated, ["BU_g0.1"])
-
-
-def test_run_scenario_writes_three_csvs_and_manifest(gep_path, small_control, tmp_path):
-    from scenario_runner import run_scenario
-    m = run_scenario(small_control, "BU_g0.1", tmp_path / "b1", log=lambda *a: None)
-    d = tmp_path / "b1" / "BU_g0.1"
+@pytest.mark.model
+def test_run_scenario_writes_three_csvs_and_manifest(shared_control, shared_batch):
+    d = shared_batch / "BU_g0.1"
     for suffix in ("Results", "Summaries", "Variables"):
         assert (d / f"BU_g0.1_{suffix}.csv").exists(), suffix
+    m = json.loads((d / "manifest.json").read_text())
     assert m["status"] == "complete" and m["rows_out"] == 500 and m["rows_in"] == 500
     assert len(m["calibrated_csv_sha256"]) == 64 and m["scenario_id"] == "BU_g0.1"
     assert m["parameters"]["grid_generation_cost"] == 0.1
     assert m["parameters"]["mg_pv_capital_cost"] == {"inf": 2950.0}
     assert m["technology_constants"]["grid"]["connection_cost_per_hh"] == 125
     assert m["outputs"]["results"]["bytes"] > 0 and m["seconds"] > 0
-    saved = json.loads((d / "manifest.json").read_text())
-    assert saved["status"] == "complete"
+    assert m["control_file_sha256"] == shared_control.sha256
     res = pd.read_csv(d / "BU_g0.1_Results.csv")
     assert res.columns[0] == "index" and "FinalElecCode2040" in res.columns
     assert res["FinalElecCode2040"].isin([1, 2, 3, 5, 7]).all()
@@ -60,17 +39,23 @@ def test_run_scenario_writes_three_csvs_and_manifest(gep_path, small_control, tm
     assert v["scenario_id"] == "BU_g0.1" and v["Urban target tier"] == "6"
 
 
-def test_run_scenario_skips_when_complete_and_reruns_on_force(gep_path, small_control, tmp_path):
+@pytest.mark.model
+def test_run_scenario_skips_when_complete(shared_control, shared_batch):
     from scenario_runner import run_scenario
-    quiet = lambda *a: None
-    run_scenario(small_control, "BU_g0.1", tmp_path / "b1", log=quiet)
-    again = run_scenario(small_control, "BU_g0.1", tmp_path / "b1", log=quiet)
+    again = run_scenario(shared_control, "BU_g0.1", shared_batch, log=QUIET)
     assert again["skipped"] is True and again["status"] == "complete"
-    forced = run_scenario(small_control, "BU_g0.1", tmp_path / "b1", force=True, log=quiet)
+
+
+@pytest.mark.model
+def test_run_scenario_force_reruns(small_control, tmp_path):
+    from scenario_runner import run_scenario
+    first = run_scenario(small_control, "BU_g0.1", tmp_path / "b1", log=QUIET)
+    forced = run_scenario(small_control, "BU_g0.1", tmp_path / "b1", force=True, log=QUIET)
     assert forced.get("skipped", False) is False
+    assert forced["started"] >= first["finished"]
 
 
-def test_run_scenario_fails_fast_on_missing_column(gep_path, small_control, tmp_path, sample_calibrated):
+def test_run_scenario_fails_fast_on_missing_column(small_control, tmp_path, sample_calibrated):
     from scenario_control import ControlError
     from scenario_runner import run_scenario
     df = pd.read_csv(sample_calibrated, low_memory=False).drop(columns=["hc_count_com_hc"])
@@ -78,12 +63,20 @@ def test_run_scenario_fails_fast_on_missing_column(gep_path, small_control, tmp_
     df.to_csv(bad, index=False)
     small_control.paths["calibrated_csv"] = bad
     with pytest.raises(ControlError, match="hc_count_com_hc"):
-        run_scenario(small_control, "BU_g0.1", tmp_path / "b2", log=lambda *a: None)
+        run_scenario(small_control, "BU_g0.1", tmp_path / "b2", log=QUIET)
     assert not (tmp_path / "b2" / "BU_g0.1" / "BU_g0.1_Results.csv").exists()
 
 
-def test_summary_from_manifest_reads_back(gep_path, small_control, tmp_path):
-    from scenario_runner import run_scenario, summary_from_manifest
-    run_scenario(small_control, "BU_g0.1", tmp_path / "b3", log=lambda *a: None)
-    s = summary_from_manifest(tmp_path / "b3", "BU_g0.1")
+def test_run_scenario_fails_when_calibrated_file_missing(small_control, tmp_path):
+    from scenario_control import ControlError
+    from scenario_runner import run_scenario
+    small_control.paths["calibrated_csv"] = tmp_path / "absent.csv"
+    with pytest.raises(ControlError, match="calibrate first"):
+        run_scenario(small_control, "BU_g0.1", tmp_path / "b3", log=QUIET)
+
+
+@pytest.mark.model
+def test_summary_from_manifest_reads_back(shared_batch):
+    from scenario_runner import summary_from_manifest
+    s = summary_from_manifest(shared_batch, "BU_g0.1")
     assert s.loc["Total", "Population2030"] > 0

@@ -645,3 +645,90 @@ def run_scenario(control, scenario_id: str, batch_dir, force: bool = False, log=
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     log(f"[{scenario_id}] complete in {manifest['seconds']} s, {manifest['rows_out']} settlements")
     return manifest
+
+
+# ---------------------------------------------------------------------------
+# Batch: several scenarios, one comparison table
+# ---------------------------------------------------------------------------
+COMPARISON_COLUMNS = ["scenario_id", "label", "demand_case", "grid_generation_cost",
+                      "urban_target_tier", "rural_target_tier", "technology", "year",
+                      "population", "new_connections", "capacity_mw", "investment_musd"]
+
+
+def resolve_batch_dir(control, batch_name=None) -> Path:
+    """paths.output_root / batch_name, the name defaulting to today's date."""
+    import datetime as _dt
+    name = batch_name or _dt.date.today().isoformat()
+    return Path(control.paths["output_root"]) / name
+
+
+def select_ids(control, ids=None) -> list:
+    """The scenario ids to run, in control-file order; unknown ids are an error."""
+    from scenario_control import ControlError
+    valid = control.ids()
+    if ids is None:
+        return list(valid)
+    unknown = [i for i in ids if i not in valid]
+    if unknown:
+        raise ControlError(f"unknown scenario id(s) {', '.join(unknown)}; valid ids: {', '.join(valid)}")
+    return [i for i in valid if i in set(ids)]
+
+
+def comparison_table(control, batch_dir, ids) -> pd.DataFrame:
+    """Long table, one row per scenario x technology x year, from the Summaries files."""
+    rows = []
+    for sid in ids:
+        s = control.scenario(sid)
+        p = control.resolved(sid)
+        table = summary_from_manifest(batch_dir, sid)
+        for tech, r in table.iterrows():
+            for col in table.columns:
+                if col.startswith("Population"):
+                    year = int(col[len("Population"):])
+                    rows.append({
+                        "scenario_id": sid, "label": s.label, "demand_case": s.demand_case,
+                        "grid_generation_cost": p["grid_generation_cost"],
+                        "urban_target_tier": p["urban_target_tier"],
+                        "rural_target_tier": p["rural_target_tier"],
+                        "technology": tech, "year": year,
+                        "population": r[f"Population{year}"],
+                        "new_connections": r[f"NewConnections{year}"],
+                        "capacity_mw": r[f"Capacity{year} (MW)"],
+                        "investment_musd": r[f"Investment{year} (million USD)"],
+                    })
+    return pd.DataFrame(rows, columns=COMPARISON_COLUMNS)
+
+
+def run_batch(control, ids=None, batch_name=None, force: bool = False, calibrate_first: bool = False,
+              log=print) -> Path:
+    """Run the selected scenarios (all by default) into one batch folder.
+
+    Calibrates first when asked or when the calibrated file is missing. Writes
+    comparison_summary.csv over the selected scenarios and appends to
+    batch_log.txt. Returns the batch folder.
+    """
+    import datetime as _dt
+    selected = select_ids(control, ids)          # fails before anything is created
+    batch_dir = resolve_batch_dir(control, batch_name)
+    calibrated_csv = Path(control.paths["calibrated_csv"])
+    if calibrate_first or not calibrated_csv.exists():
+        log(f"calibrating from {Path(control.paths['raw_input_csv']).name}")
+        calibrate(control)
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    log_path = batch_dir / "batch_log.txt"
+
+    def stamp(sid, status, seconds):
+        with open(log_path, "a", encoding="utf-8") as fh:
+            fh.write(f"{_dt.datetime.now().isoformat(timespec='seconds')}\t{sid}\t{status}\t{seconds}\n")
+
+    for sid in selected:
+        try:
+            m = run_scenario(control, sid, batch_dir, force=force, log=log)
+        except Exception as e:  # record, then re-raise: a half-run batch must be visible
+            stamp(sid, f"failed: {e}", "")
+            raise
+        stamp(sid, "skipped" if m.get("skipped") else m["status"], m.get("seconds", ""))
+
+    comparison_table(control, batch_dir, selected).to_csv(batch_dir / "comparison_summary.csv", index=False)
+    log(f"batch {batch_dir.name}: {len(selected)} scenario(s), comparison_summary.csv written")
+    return batch_dir

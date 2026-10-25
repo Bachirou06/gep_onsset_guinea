@@ -60,3 +60,29 @@ def profiles(repo_root) -> dict:
     if not (pv.exists() and wind.exists()):
         pytest.skip("hourly profiles not available under GuineaRuns/Inputs/Guinea Data")
     return {"pv": pv, "wind": wind}
+
+
+# --- controls and runs on the sample ------------------------------------------------
+# Every model run costs about two minutes whatever the row count (the hybrid
+# sizing simulates 8,760 hours per size combination), so the model tests share
+# one batch produced once per session.
+
+@pytest.fixture(scope="session")
+def shared_control(gep_path, repo_root, sample_calibrated, profiles, tmp_path_factory):
+    """Two scenarios on the sample; outputs under one session-wide folder."""
+    from tests.helpers import make_control
+    return make_control(repo_root, tmp_path_factory.mktemp("shared"), sample_calibrated,
+                        ["BU_g0.1", "TD_Low_g0.1"])
+
+
+@pytest.fixture(scope="session")
+def shared_batch(shared_control):
+    """One batch of the two scenarios, run once per session (about four minutes)."""
+    from scenario_runner import run_batch
+    return run_batch(shared_control, None, "shared", log=lambda *a: None)
+
+
+@pytest.fixture
+def small_control(gep_path, repo_root, sample_calibrated, profiles, tmp_path):
+    from tests.helpers import make_control
+    return make_control(repo_root, tmp_path, sample_calibrated, ["BU_g0.1"])
