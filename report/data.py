@@ -8,9 +8,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from report.constants import (CACHE_SCHEMA_VERSION, CASE_ORDER, CATEGORY_COLUMNS, INT8_COLUMNS,
+from report.constants import (CACHE_SCHEMA_VERSION, CASE_ORDER, CATEGORY_COLUMNS, CORE_CELLS, INT8_COLUMNS,
                               KEY_TO_CODE, NOT_ASSIGNED, REFERENCE_COST, RESULT_COLUMNS, SUMMARY_INDEX,
-                              YEARS)
+                              YEARS, core_label)
 
 
 REFERENCE_VARIANT = "reference"
@@ -54,6 +54,20 @@ class Batch:
             if s is not None:
                 out.append(s)
         return out
+
+    def core(self) -> dict:
+        """(demand_case, grid_cost) -> ScenarioData for the core cells present in the batch (reference
+        variant), in CORE_CELLS order. A cell that was not run is simply absent."""
+        out = {}
+        for case, cost in CORE_CELLS:
+            s = self._by_case.get(case, {}).get(REFERENCE_VARIANT, {}).get(cost)
+            if s is not None:
+                out[(case, cost)] = s
+        return out
+
+    def core_labels(self) -> dict:
+        """(demand_case, grid_cost) -> display label for the present core cells, same order as core()."""
+        return {k: core_label(*k) for k in self.core()}
 
     def by_case(self, demand_case: str, variant: str = REFERENCE_VARIANT) -> dict:
         """grid_cost -> ScenarioData for one demand case and variant."""

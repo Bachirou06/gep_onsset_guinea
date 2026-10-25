@@ -36,10 +36,34 @@ CASE_STUDY_NAME = {c[0]: c[1] for c in DEMAND_CASES}
 CASE_DESCRIPTION = {c[0]: c[2] for c in DEMAND_CASES}
 CASE_COLOUR = {c[0]: c[3] for c in DEMAND_CASES}
 
-COST_LEVELS = [0.047, 0.078, 0.1, 0.22]
-REFERENCE_COST = 0.1
-COST_ROLE = {0.047: "legacy", 0.078: "low variant", 0.1: "reference", 0.22: "high variant"}
+COST_LEVELS = [0.047, 0.078, 0.085, 0.1, 0.22]
+REFERENCE_COST = 0.1                                      # baseline of the extended sensitivity (sweep, bins, other demand cases)
+COST_ROLE = {0.047: "legacy", 0.078: "low variant", 0.085: "hydro cost regime", 0.1: "current tariff regime (reference of the sweep)",
+             0.22: "cost-reflective regime"}
+
+# Grid-cost regimes of the final scenario set (team decision 2026-10-25): (cost, key, name, source).
+REGIMES = [
+    (0.22, "cost_reflective", "Cost-reflective",
+     "0.22 USD/kWh, the cost-reflective grid generation cost of the Mission 300 compact, without subsidy"),
+    (0.085, "hydro_cost", "Hydro cost",
+     "0.085 USD/kWh, the generation cost of a hydro-dominant supply, a subsidised regime"),
+    (0.1, "current_tariff", "Current tariff",
+     "0.1 USD/kWh, the current subsidised tariff-based level, the reference of the earlier runs"),
+]
+REGIME_ORDER = [r[0] for r in REGIMES]
+PRIMARY_COST = 0.22                                       # the regime behind the maps, the phasing chapter and the KPI tiles
+REGIME_KEY = {r[0]: r[1] for r in REGIMES}
+REGIME_NAME = {r[0]: r[2] for r in REGIMES}
+REGIME_SOURCE = {r[0]: r[3] for r in REGIMES}
 SENSITIVITY_CASES = ["TD_Low_minus", "TD_High_minus", "BU"]       # the key cases carry the cost sweep and the variants
+CORE_CELLS = [(case, cost) for case in KEY_CASES for cost in REGIME_ORDER]      # the nine core scenarios, display order
+
+
+def core_label(case: str, cost: float) -> str:
+    """Display label of a core scenario: study name and regime name, for example 'BU, Cost-reflective'."""
+    return f"{CASE_STUDY_NAME.get(case, case)}, {REGIME_NAME.get(cost, f'{cost} USD/kWh')}"
+
+
 DEMAND_VARIANTS = [("TD_Low", "TD_Low_minus"), ("TD_High", "TD_High_minus"), ("TD_High_plus", "TD_High")]   # (variant, base)
 YEARS = (2030, 2040)
 START_YEAR = 2025
