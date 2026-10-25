@@ -60,6 +60,14 @@ def _letter(i: int) -> str:
     return letters[i % 26] if i < 26 else _letter(i // 26 - 1) + letters[i % 26]
 
 
+VARIANT_SUBTITLE = {"optgrid": "grid caps removed", "optgrid_optmg": "grid caps removed and mini-grid PV panels 25 percent cheaper"}
+
+
+def _variant_subtitle(variant: str) -> str:
+    """Short wording of a supply-side variant for a map title band."""
+    return VARIANT_SUBTITLE.get(variant, variant)
+
+
 def _case_rows(refs, fn):
     """{study name: value} over the reference scenarios in display order."""
     return {CASE_STUDY_NAME.get(s.demand_case, s.demand_case): fn(s) for s in refs}
@@ -377,13 +385,15 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                           index=False, caption="Table 9.3. Demand variants against their base case at the reference grid cost")
     VARIANT_LABELS = {"optgrid": "Optimistic grid expansion (no connection or capacity cap to 2030)",
                       "optgrid_optmg": "Optimistic grid expansion and mini-grid PV panels 25 percent cheaper"}
+    vlabels = {**METRIC_LABELS, "grid_ext_people_2040": "People on grid extension 2040", "mg_pv_people_2040": "People on mini-grid PV 2040",
+               "sa_pv_people_2040": "People on stand-alone PV 2040", "unserved_2030": "People not yet electrified 2030"}
     if len(vc):
         wide = vc.pivot_table(index=["demand_case", "variant", "metric"], values=["reference", "variant_value", "delta_pct"], aggfunc="first")
         vrows = []
         for (case, variant, metric), r in wide.iterrows():
             f = metric_fmt.get(metric, F_INT if "people" in metric or "unserved" in metric else F_2)
             vrows.append({"Demand case": CASE_STUDY_NAME.get(case, case), "Variant": VARIANT_LABELS.get(variant, variant),
-                          "Metric": METRIC_LABELS.get(metric, metric.replace("_", " ")), "Reference": f.format(r["reference"]),
+                          "Metric": vlabels.get(metric, metric.replace("_", " ")), "Reference": f.format(r["reference"]),
                           "Variant value": f.format(r["variant_value"]), "Change (%)": f"{r['delta_pct']:+.1f}" if pd.notna(r["delta_pct"]) else "n/a"})
         order = {m: i for i, m in enumerate(M.VARIANT_METRICS)}
         vdf = pd.DataFrame(vrows)
@@ -519,8 +529,6 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     else:
         T["t95"] = ""
     figs["ch9c"] = []
-    vlabels = {**METRIC_LABELS, "grid_ext_people_2040": "People on grid extension 2040", "mg_pv_people_2040": "People on mini-grid PV 2040",
-               "sa_pv_people_2040": "People on stand-alone PV 2040", "unserved_2030": "People not yet electrified 2030"}
     for i, variant in enumerate(variant_names):
         sub = vc[vc["variant"] == variant]
         fid = "fig-9-8" if i == 0 else f"fig-9-8{_letter(i)}"
@@ -583,7 +591,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
         if REFERENCE_COST in bu and bu_variants:
             vname = "optgrid_optmg" if "optgrid_optmg" in bu_variants else next(iter(bu_variants))
             vs = bu_variants[vname]
-            add("map97", MP.switch_map(bu[REFERENCE_COST].settlements, vs.settlements, 2040, layers, "the reference", VARIANT_LABELS.get(vname, vname).lower(),
+            add("map97", MP.switch_map(bu[REFERENCE_COST].settlements, vs.settlements, 2040, layers, "the reference", _variant_subtitle(vname),
                                        "Technology switches under the supply-side variant", src(vs, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi),
                 f"Settlements whose least-cost technology changes under the variant '{VARIANT_LABELS.get(vname, vname)}', bottom-up case at {REFERENCE_COST} USD/kWh.",
                 src(vs, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), "map-9-7", "9.7b", "Technology switch map, supply-side variant")

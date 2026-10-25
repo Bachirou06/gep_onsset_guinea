@@ -68,6 +68,18 @@ def name(case: str) -> str:
     return CASE_STUDY_NAME.get(case, case)
 
 
+def lc_first(label: str) -> str:
+    """Lower-case the first letter only, so that acronyms inside the label (PV, HV) stay."""
+    return label[:1].lower() + label[1:] if label else label
+
+
+def change_clause(delta, unit_text: str, what: str, up: str, down: str) -> str:
+    """'raises <what> by <unit_text>', 'lowers <what> by <unit_text>', or 'leaves <what> unchanged'
+    when the change is within tolerance, so that no sentence reads 'leaves unchanged ... by 0%'."""
+    d = direction(delta, up, down, "")
+    return f"{d} {what} by {unit_text}" if d else f"leaves {what} unchanged"
+
+
 # ---------------------------------------------------------------------------
 # Key messages
 # ---------------------------------------------------------------------------
@@ -112,7 +124,7 @@ def km_tech_mix(headlines: dict, key_cases=None) -> dict:
         h = headlines[c]
         nc = h["new_connections_by_tech"]
         nc_t = sum(nc.values())
-        dre_detail = ", ".join(f"{TECH_LABEL[k].lower()} {fmt_pct(nc[k] / nc_t)}" for k in (3, 5, 7) if nc_t and nc[k] > 0)
+        dre_detail = ", ".join(f"{lc_first(TECH_LABEL[k])} {fmt_pct(nc[k] / nc_t)}" for k in (3, 5, 7) if nc_t and nc[k] > 0)
         parts.append(f"{name(c)}: decentralised systems take {fmt_pct(h['dre_share_new_connections'])} of the "
                      f"{fmt_people(nc_t)} new connections ({dre_detail}), grid extension "
                      f"{fmt_pct(h['grid_ext_share_new_connections'])}; counting the people already on the grid, "
@@ -221,7 +233,7 @@ def km_grid_extension_vanishes(sens: pd.DataFrame) -> dict:
         if hi_p <= 0:
             gone.append(name(case))
         else:
-            parts.append(f"{fmt_people(hi_p)} in {name(case)} against {fmt_people(ref_p)} at the reference")
+            parts.append(f"{fmt_people(hi_p)} people in {name(case)} against {fmt_people(ref_p)} people at the reference")
     if gone and not parts:
         text = (f"At {hi} USD/kWh no settlement is connected by grid extension in any case ({', '.join(gone)}): "
                 f"grid extension disappears from the least-cost mix once generation is priced at its unsubsidised cost, "
@@ -272,10 +284,12 @@ def km_supply_variants(vc: pd.DataFrame, case: str = "BU") -> dict:
         inv = _check(d.loc["investment_musd_cum", "delta_pct"], "investment delta")
         grid = _check(d.loc["grid_share_2040", "delta_abs"], "grid share delta") * 100
         mg = _check(d.loc["mg_pv_people_2040", "delta_abs"], "mini-grid people delta")
-        parts.append(f"{VARIANT_WORDS.get(variant, variant)} {direction(inv / 100, 'raises', 'lowers')} total investment by "
-                     f"{abs(inv):.0f}%, {direction(grid / 100, 'raises', 'lowers')} the grid share of the 2040 population by "
-                     f"{abs(grid):.0f} points and {direction(mg / 1e5, 'adds', 'removes', 'leaves unchanged')} "
-                     f"{fmt_people(abs(mg))} people on mini-grid PV")
+        mg_dir = direction(mg / 1e5, "adds", "removes", "")
+        mg_clause = f"{mg_dir} {fmt_people(abs(mg))} people on mini-grid PV" if mg_dir else "leaves the people on mini-grid PV unchanged"
+        parts.append(f"{VARIANT_WORDS.get(variant, variant)} "
+                     f"{change_clause(inv / 100, f'{abs(inv):.0f}%', 'total investment', 'raises', 'lowers')}, "
+                     f"{change_clause(grid / 100, f'{abs(grid):.0f} points', 'the grid share of the 2040 population', 'raises', 'lowers')} "
+                     f"and {mg_clause}")
     return {"id": "km-supply", "text": f"In the {name(case)} case, {'; '.join(parts)}.", "source": "Table 9.4"}
 
 
