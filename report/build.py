@@ -54,6 +54,12 @@ def _versions():
     return v
 
 
+def _letter(i: int) -> str:
+    """Sub-figure letter for the i-th panel (0 -> a, 25 -> z, 26 -> aa)."""
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    return letters[i % 26] if i < 26 else _letter(i // 26 - 1) + letters[i % 26]
+
+
 def _case_rows(refs, fn):
     """{study name: value} over the reference scenarios in display order."""
     return {CASE_STUDY_NAME.get(s.demand_case, s.demand_case): fn(s) for s in refs}
@@ -459,13 +465,16 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
         if hi_cost_all not in by_cost or REFERENCE_COST not in by_cost:
             continue
         fl, tot = M.switches(by_cost[REFERENCE_COST].settlements, by_cost[hi_cost_all].settlements)
-        if not len(fl):
-            continue
-        fid = "fig-9-5" if n_sw == 0 else f"fig-9-5{'bcd'[n_sw - 1]}"
-        figs["ch9"].append({"id": fid, "num": "9.5" if n_sw == 0 else f"9.5{'bcd'[n_sw - 1]}",
-                            "div": F.fig_to_div(F.switch_matrix(fl, f"Technology switches, {CASE_STUDY_NAME.get(case)} at {REFERENCE_COST} against {hi_cost_all} USD/kWh"), fid),
-                            "caption": f"People moving between technologies when the grid cost rises from {REFERENCE_COST} to {hi_cost_all} USD/kWh, "
-                                       f"{CASE_STUDY_NAME.get(case)} case ({tot['settlements']:,} settlements, {MS.fmt_people(tot['people'])} people).",
+        fid = "fig-9-5" if n_sw == 0 else f"fig-9-5{_letter(n_sw)}"
+        nm = CASE_STUDY_NAME.get(case, case)
+        if len(fl):
+            div = F.fig_to_div(F.switch_matrix(fl, f"Technology switches, {nm} at {REFERENCE_COST} against {hi_cost_all} USD/kWh"), fid)
+            caption = (f"People moving between technologies when the grid cost rises from {REFERENCE_COST} to {hi_cost_all} USD/kWh, "
+                       f"{nm} case ({tot['settlements']:,} settlements, {MS.fmt_people(tot['people'])} people).")
+        else:           # the figure keeps its number so that ids are stable across builds and samples
+            div = f"<div id='{fid}'><p class='note'>No settlement changes technology between {REFERENCE_COST} and {hi_cost_all} USD/kWh in the {nm} case.</p></div>"
+            caption = f"Technology switches between {REFERENCE_COST} and {hi_cost_all} USD/kWh, {nm} case: none."
+        figs["ch9"].append({"id": fid, "num": "9.5" if n_sw == 0 else f"9.5{_letter(n_sw)}", "div": div, "caption": caption,
                             "source": f"{by_cost[REFERENCE_COST].scenario_id} and {by_cost[hi_cost_all].scenario_id} Results files joined on id"})
         n_sw += 1
     if n_sw == 0:
@@ -514,8 +523,8 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                "sa_pv_people_2040": "People on stand-alone PV 2040", "unserved_2030": "People not yet electrified 2030"}
     for i, variant in enumerate(variant_names):
         sub = vc[vc["variant"] == variant]
-        fid = "fig-9-8" if i == 0 else f"fig-9-8{'bcd'[i - 1] if i <= 3 else i}"
-        figs["ch9c"].append({"id": fid, "num": "9.8" if i == 0 else f"9.8{'bcd'[i - 1] if i <= 3 else i}",
+        fid = "fig-9-8" if i == 0 else f"fig-9-8{_letter(i)}"
+        figs["ch9c"].append({"id": fid, "num": "9.8" if i == 0 else f"9.8{_letter(i)}",
                              "div": F.fig_to_div(F.delta_bars_by_case(sub, VARIANT_LABELS.get(variant, variant), vlabels,
                                                                       [m for m in M.VARIANT_METRICS if m != "unserved_2030"]), fid),
                              "caption": f"Percent change of the headline metrics under the variant '{VARIANT_LABELS.get(variant, variant)}' "
@@ -546,7 +555,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                                     f"{nm}: {CASE_DESCRIPTION.get(s.demand_case, '')}, grid cost {REFERENCE_COST} USD/kWh",
                                     src(s, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi)
             add(None, png, f"Least-cost technology per settlement in 2040, {nm} case.", src(s, "X_deg, Y_deg, FinalElecCode2040, Pop2040"),
-                f"map-4-5-{s.demand_case}", f"4.5{'abcde'[i]}", f"Least-cost technology map 2040, {nm}", into=maps_ctx["ch4"])
+                f"map-4-5-{s.demand_case}", f"4.5{_letter(i)}", f"Least-cost technology map 2040, {nm}", into=maps_ctx["ch4"])
         add("map61", MP.hydro_map(primary.settlements, layers, "Hydro mini-grids and small-hydro potential", src(primary, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi),
             f"Settlements served by hydro mini-grids in 2040 ({CASE_STUDY_NAME.get(primary.demand_case)} case) and the small-hydro potential sites.",
             src(primary, "X_deg, Y_deg, FinalElecCode2040, Pop2040") + "; Guinea_mini_hydro.gpkg", "map-6-1", "6.1", "Hydro mini-grid map")
@@ -556,7 +565,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
             add(None, MP.two_panel_map(s.settlements, layers, f"Phasing of the least-cost technology, {nm} case", src(s, "X_deg, Y_deg, FinalElecCode2030, FinalElecCode2040"),
                                        subtitle=f"{CASE_DESCRIPTION.get(case, '')}, grid cost {REFERENCE_COST} USD/kWh", dpi=map_dpi),
                 f"Least-cost technology in 2030 (70 percent access) and 2040 (universal access), {nm} case.",
-                src(s, "X_deg, Y_deg, FinalElecCode2030, FinalElecCode2040"), f"map-7-1-{case}", f"7.1{'ab'[i]}", f"Two-panel phasing map, {nm}", into=maps_ctx["ch7"])
+                src(s, "X_deg, Y_deg, FinalElecCode2030, FinalElecCode2040"), f"map-7-1-{case}", f"7.1{_letter(i)}", f"Two-panel phasing map, {nm}", into=maps_ctx["ch7"])
         n_map = 0
         for case in [c for c in SENSITIVITY_CASES if c in ref_by_case]:
             by_cost = batch.by_case(case)
@@ -568,7 +577,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                                     f"Technology switches with a higher grid cost, {nm} case", src(hi_s, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), dpi=map_dpi),
                 f"Settlements whose least-cost technology changes when the grid cost rises from {REFERENCE_COST} to {hi_cost_all} USD/kWh, {nm} case.",
                 src(hi_s, "X_deg, Y_deg, FinalElecCode2040, Pop2040"), "map-9-6" if n_map == 0 else f"map-9-6-{case}",
-                "9.6" if n_map == 0 else f"9.6{'bcd'[n_map - 1]}", f"Technology switch map, {nm}", into=maps_ctx["ch9"])
+                "9.6" if n_map == 0 else f"9.6{_letter(n_map)}", f"Technology switch map, {nm}", into=maps_ctx["ch9"])
             n_map += 1
         bu_variants = batch.variants("BU")
         if REFERENCE_COST in bu and bu_variants:

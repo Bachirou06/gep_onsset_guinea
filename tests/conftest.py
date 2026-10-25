@@ -140,3 +140,37 @@ def report_sample_batch(repo_root, report_batch_dir) -> Path:
             shutil.copy2(report_batch_dir / name, out / name)
     marker.write_text("ok")
     return out
+
+
+CORE_COSTS = ("0.047", "0.078", "0.1", "0.22")
+
+
+@pytest.fixture(scope="session")
+def report_core_sample_batch(report_sample_batch) -> Path:
+    """The sample batch restricted to the reference-variant scenarios of the four study
+    grid-cost levels (14 scenarios): no cost bins, no supply-side variants. Used by the
+    tests that synthesise bins and variants and by the 'without' tests."""
+    import json
+    import shutil
+    import pandas as pd
+    out = CACHE / "report_sample_500_core" / report_sample_batch.name
+    marker = out / ".complete"
+    if marker.exists():
+        return out
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    keep = []
+    for d in sorted(p for p in report_sample_batch.iterdir() if p.is_dir()):
+        m = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+        cost = str(m["parameters"]["grid_generation_cost"])
+        if m.get("variant", "reference") == "reference" and cost in CORE_COSTS:
+            shutil.copytree(d, out / d.name)
+            keep.append(d.name)
+    for name in ("batch_log.txt", "CHECKS.md"):
+        if (report_sample_batch / name).exists():
+            shutil.copy2(report_sample_batch / name, out / name)
+    comp = pd.read_csv(report_sample_batch / "comparison_summary.csv")
+    comp[comp["scenario_id"].isin(keep)].to_csv(out / "comparison_summary.csv", index=False)
+    marker.write_text("ok")
+    return out

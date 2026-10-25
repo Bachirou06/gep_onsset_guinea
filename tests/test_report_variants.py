@@ -7,10 +7,10 @@ import pytest
 
 
 @pytest.fixture
-def batch_with_variants(report_sample_batch, tmp_path):
+def batch_with_variants(report_core_sample_batch, tmp_path):
     """The sample batch plus a copy of BU_g0.1 posing as BU_optgrid_g0.1 (variant optgrid)."""
     b = tmp_path / "batch"
-    shutil.copytree(report_sample_batch, b)
+    shutil.copytree(report_core_sample_batch, b)
     src, dst = b / "BU_g0.1", b / "BU_optgrid_g0.1"
     shutil.copytree(src, dst)
     for f in list(dst.iterdir()):
@@ -27,7 +27,7 @@ def batch_with_variants(report_sample_batch, tmp_path):
 def test_batch_keeps_reference_and_variant_apart(batch_with_variants, repo_root, tmp_path):
     from report.data import load_batch
     bt = load_batch(batch_with_variants, repo_root, cache_dir=tmp_path / "cache", log=lambda *a: None)
-    assert len(bt.scenarios) == 15
+    assert len(bt.scenarios) == 21 + 1          # 21 reference-sweep scenarios in the core sample plus the synthetic variant
     assert bt.scenarios["BU_optgrid_g0.1"].variant == "optgrid"
     assert bt.scenarios["BU_g0.1"].variant == "reference"
     ref = [s.scenario_id for s in bt.reference()]
@@ -47,16 +47,16 @@ def test_report_gets_a_supply_variants_section(batch_with_variants, repo_root, t
     assert "optgrid" in html and "full grid expansion" in html.lower() or "Optimistic grid expansion" in html
 
 
-def test_report_without_variants_says_so(report_sample_batch, repo_root, tmp_path):
+def test_report_without_variants_says_so(report_core_sample_batch, repo_root, tmp_path):
     from report.build import build
-    path = build(report_sample_batch, repo_root, out_path=tmp_path / "r0.html", inputs_dir=None, maps=False, geo=False,
+    path = build(report_core_sample_batch, repo_root, out_path=tmp_path / "r0.html", inputs_dir=None, maps=False, geo=False,
                  sample=True, log=lambda *a: None)
     html = path.read_text(encoding="utf-8")
     assert 'id="supply-variants"' in html and "No supply-side variant" in html
 
 
-def test_manifest_without_variant_is_reference(report_sample_batch, repo_root, tmp_path):
+def test_manifest_without_variant_is_reference(report_core_sample_batch, repo_root, tmp_path):
     from report.data import load_batch
-    bt = load_batch(report_sample_batch, repo_root, cache_dir=tmp_path / "cache", log=lambda *a: None)
+    bt = load_batch(report_core_sample_batch, repo_root, cache_dir=tmp_path / "cache", log=lambda *a: None)
     assert all(s.variant == "reference" for s in bt.scenarios.values())
     assert bt.variant_names() == []

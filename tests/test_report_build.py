@@ -12,8 +12,10 @@ from report.constants import CHAPTERS  # noqa: E402
 
 INPUTS = Path(__file__).resolve().parents[1] / "GuineaRuns" / "Inputs" / "Guinea Data"
 EXPECTED_FIGURES = ["fig-4-1", "fig-4-2", "fig-4-3", "fig-4-4", "fig-4-6", "fig-5-1", "fig-7-2",
-                    "fig-9-1", "fig-9-2", "fig-9-3", "fig-9-4", "fig-9-5", "fig-9-7"]
-EXPECTED_MAPS = ["map-3-1", "map-4-5-BU", "map-4-5-TD_Low", "map-6-1", "map-7-1-BU", "map-9-6"]
+                    "fig-9-1", "fig-9-2", "fig-9-3", "fig-9-4", "fig-9-5", "fig-9-5b", "fig-9-5c", "fig-9-7",
+                    "fig-9-8", "fig-9-8b", "fig-9-9", "fig-9-9b", "fig-9-10"]
+EXPECTED_MAPS = ["map-3-1", "map-4-5-BU", "map-4-5-TD_Low", "map-4-5-TD_High_minus", "map-6-1", "map-7-1-BU",
+                 "map-9-6", "map-9-6-TD_High_minus", "map-9-6-BU", "map-9-7"]
 
 
 @pytest.fixture(scope="session")
@@ -37,7 +39,7 @@ def test_build_writes_html_and_manifest(built):
     path, out_dir = built
     assert path.exists() and path.stat().st_size > 5_000_000      # plotly.js inlined
     m = json.loads((out_dir / "build_manifest.json").read_text(encoding="utf-8"))
-    assert m["batch"] and m["n_scenarios"] == 14 and m["sample"] is True
+    assert m["batch"] and m["n_scenarios"] == 38 and m["sample"] is True
     assert "assets" in m and m["html_bytes"] == path.stat().st_size
     assert m["consistency"] == "skipped (sample)"
 
@@ -83,3 +85,9 @@ def test_full_build_on_real_batch(report_batch_dir, repo_root, tmp_path):
     assert path.stat().st_size < 25_000_000
     html = path.read_text(encoding="utf-8")
     assert "1,752" in html            # TD_Low_g0.1 cumulative investment 420.59 + 1,331.83
+
+
+def test_subfigure_letters_cover_more_than_five_panels():
+    from report.build import _letter
+    assert [_letter(i) for i in (0, 4, 5)] == ["a", "e", "f"]
+    assert _letter(25) == "z" and _letter(26) == "aa"

@@ -10,10 +10,10 @@ from report import metrics as M
 
 
 @pytest.fixture
-def batch_with_bins(report_sample_batch, tmp_path):
+def batch_with_bins(report_core_sample_batch, tmp_path):
     """The sample batch plus three extra BU cost levels cloned from BU_g0.1 (0.12, 0.16, 0.2)."""
     b = tmp_path / "batch"
-    shutil.copytree(report_sample_batch, b)
+    shutil.copytree(report_core_sample_batch, b)
     for cost in (0.12, 0.16, 0.2):
         sid = f"BU_g{cost}"
         dst = b / sid
@@ -59,9 +59,9 @@ def test_report_gets_the_bins_section(batch_with_bins, repo_root, tmp_path):
     assert "Table 9.5" in html
 
 
-def test_report_without_bins_says_so(report_sample_batch, repo_root, tmp_path):
+def test_report_without_bins_says_so(report_core_sample_batch, repo_root, tmp_path):
     from report.build import build
-    path = build(report_sample_batch, repo_root, out_path=tmp_path / "r0.html", inputs_dir=None, maps=False, geo=False,
+    path = build(report_core_sample_batch, repo_root, out_path=tmp_path / "r0.html", inputs_dir=None, maps=False, geo=False,
                  sample=True, log=lambda *a: None)
     html = path.read_text(encoding="utf-8")
     assert 'id="cost-bins"' in html and "fewer than five" in html

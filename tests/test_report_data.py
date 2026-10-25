@@ -53,7 +53,7 @@ def test_cache_created_reused_and_invalidated(report_sample_batch, tmp_path):
 def test_load_batch_structure(report_sample_batch, repo_root, tmp_path):
     from report.data import load_batch
     b = load_batch(report_sample_batch, repo_root, cache_dir=tmp_path / "cache", log=lambda *a: None)
-    assert b.name == report_sample_batch.name and len(b.scenarios) == 14
+    assert b.name == report_sample_batch.name and len(b.scenarios) == 38
     assert list(b.scenarios)[:5] == ["TD_Low_g0.1", "TD_Low_minus_g0.1", "TD_High_g0.1",
                                      "TD_High_plus_g0.1", "BU_g0.1"]       # control-file order
     ref = b.reference()
@@ -61,13 +61,13 @@ def test_load_batch_structure(report_sample_batch, repo_root, tmp_path):
     assert [s.demand_case for s in ref] == present                        # DEMAND_CASES order
     assert all(s.grid_cost == REFERENCE_COST for s in ref)
     bu = b.by_case("BU")
-    assert sorted(bu) == [0.047, 0.078, 0.1, 0.22] and bu[0.22].scenario_id == "BU_g0.22"
+    assert sorted(bu) == [0.047, 0.06, 0.078, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2, 0.22, 0.25] and bu[0.22].scenario_id == "BU_g0.22"
     s = b.scenarios["TD_High_g0.078"]
     assert (s.urban_tier, s.rural_tier, s.grid_cost) == (4, 3, 0.078)
     assert s.summaries.loc["Total", "Population2040"] > 0
-    assert len(b.comparison) >= 14 * 7 * 2 and len(b.control["scenarios"]) >= 14
+    assert len(b.comparison) >= 38 * 7 * 2 and len(b.control["scenarios"]) >= 38
     p = b.provenance()
-    assert p["calibrated_csv_sha256"] and p["n_scenarios"] == 14
+    assert p["calibrated_csv_sha256"] and p["n_scenarios"] == 38
     assert isinstance(p["git_commits"], list) and p["git_dirty_any"] in (True, False)
     assert len(p["control_file_sha256"]) == 64
 
