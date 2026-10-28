@@ -24,7 +24,9 @@ KKT_MAIN_NAME = "Manantali"      # the Linsan to Manantali feature of HV_KKT.shp
 LAYER_FILES = {
     "adm0": "Boundaries/gadm41_GIN_0.shp",
     "adm1": "Boundaries/gadm41_GIN_1.shp",
-    "hv_existing": "HV_Existing_lines/HT_existing_line.shp",
+    "hv_existing_legacy": "HV_Existing_lines/HT_existing_line.shp",
+    "hv_existing_new": "HV_Existing_lines/Existing_HV_*.gpkg",
+    "hv_planned": "HV_Planned_lines/Planned_HV_*.gpkg",
     "kkt": "HV_KKT/HV_KKT.shp",
     "protected": "Protected_Area_Guinea/Guinea_protected_Area_polygon.gpkg",
     "moyen_bafing": "Protected_Area_Guinea/Park_Moyen Bafing_guinea.gpkg",
@@ -33,7 +35,8 @@ LAYER_FILES = {
     "mini_hydro": "Hydro_potential/Guinea_mini_hydro.gpkg",
     "substations": "Substations/Substations.shp",
 }
-OPTIONAL_LAYERS = {"mini_hydro", "substations", "hv_existing", "protected_span_hv"}
+OPTIONAL_LAYERS = {"mini_hydro", "substations", "hv_existing_legacy", "hv_existing_new", "hv_planned", "protected_span_hv"}
+LEGACY_EXISTING_STATUS = "Existing"   # status value of the built lines in HT_existing_line.shp
 
 GEO_COLUMNS = ["id", "kkt_main_dist_km", "kkt_any_dist_km", "in_protected_area", "protected_area_name",
                "in_moyen_bafing", "affected_locality", "in_protected_span_hv", "region_gadm"]
@@ -62,10 +65,27 @@ def load_layers(inputs_dir) -> dict:
         elif g.crs.to_epsg() != 4326:
             g = g.to_crs(WGS84)
         layers[key] = g
+    layers.update(_existing_network(layers))
     kkt = layers["kkt"]
     main = kkt[kkt["Name"].astype(str).str.contains(KKT_MAIN_NAME, case=False, na=False)]
     layers["kkt_main"] = main if len(main) else kkt.iloc[[0]]
     return layers
+
+
+def _existing_network(layers: dict) -> dict:
+    """The existing HV network drawn on the maps. With the corrected layer of 2026-10-28 it is the
+    colleague's built 225 kV sections plus the Existing-status features of the legacy source
+    (the Conakry-area lines); without it, the legacy layer as a whole, as before the correction."""
+    new, legacy = layers.get("hv_existing_new"), layers.get("hv_existing_legacy")
+    if new is None and legacy is None:
+        return {}
+    if new is None:
+        return {"hv_existing": legacy}
+    parts = [new]
+    if legacy is not None and "status" in legacy:
+        parts.append(legacy[legacy["status"].astype(str) == LEGACY_EXISTING_STATUS])
+    cols = [c for c in ("name", "voltage_kV", "status", "year") if all(c in p for p in parts)]
+    return {"hv_existing": gpd.GeoDataFrame(pd.concat([p[cols + ["geometry"]] for p in parts], ignore_index=True), crs=WGS84)}
 
 
 def _layer_signature(inputs_dir: Path) -> dict:

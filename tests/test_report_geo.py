@@ -55,3 +55,16 @@ def test_distance_known_point(layers, tmp_path):
     assert g.loc[g.id == 1, "kkt_main_dist_km"].iloc[0] < 0.5
     assert g.loc[g.id == 2, "kkt_main_dist_km"].iloc[0] > 200
     assert g.loc[g.id == 2, "region_gadm"].iloc[0].startswith("Nz")
+
+
+def test_hv_existing_combines_the_corrected_layer_with_the_legacy_existing_lines(layers):
+    """Since the 2026-10-28 correction the existing network is the colleague's built 225 kV sections
+    plus the Existing-status features of the source (Conakry-area lines); unbuilt sections are planned."""
+    if not list((INPUTS / "HV_Existing_lines").glob("Existing_HV_*.gpkg")):
+        pytest.skip("corrected HV layers not available")
+    names = set(layers["hv_existing"]["name"].astype(str))
+    assert {"Kaleta - Linsan", "Kindia - Linsan", "Garafari - Linsan", "Kaleta - Maneah"} <= names
+    assert "Mali - Sambangalou" not in names
+    assert layers["hv_existing"].crs.to_epsg() == 4326
+    planned = set(layers["hv_planned"]["name"].astype(str))
+    assert "Mali - Sambangalou" in planned and "Linsan - Manantali" in planned and len(layers["hv_planned"]) == 13

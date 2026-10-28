@@ -62,3 +62,16 @@ def test_other_maps_render(sample_df, layers, tmp_path):
     assert _is_png(MP.hydro_map(sample_df, layers, title="Hydro", source_note="n"))
     geo = settlement_geo_attributes(sample_df[["id", "X_deg", "Y_deg"]], layers, tmp_path / "geo")
     assert _is_png(MP.corridor_map(sample_df, geo, layers, 10, title="Corridor", source_note="n"))
+
+
+def test_draw_network_adds_a_planned_hv_handle(layers):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    if "hv_planned" not in layers:
+        pytest.skip("corrected HV layers not available")
+    fig, ax = plt.subplots()
+    labels = [h.get_label() for h in MP.draw_network(ax, layers)]
+    plt.close(fig)
+    assert any(lab.startswith("Existing HV line") for lab in labels)
+    assert any(lab.startswith("Planned HV line") for lab in labels)
