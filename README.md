@@ -87,6 +87,33 @@ cost-reflective regime is the primary one (maps, phasing, KPI tiles), set by
 the batch as the extended sensitivity of chapter 9. All of it lives in the
 same control file and the same batch.
 
+The HV correction (28 October 2026)
+-----------------------------------
+
+The 2026-10-18 extraction had used the full line layer `HT_existing_line.shp`
+(66 features, existing and planned mixed) for both HV distance columns, so the
+model treated every planned line as built. The colleague's corrected layers
+split the 225 kV network into built sections (`Existing_HV_2026-10-28.gpkg`)
+and unbuilt sections (`Planned_HV_2026-10-28.gpkg`, under `HV_Planned_lines/`).
+`tools/hv_distances.py` recomputes the two columns with the extraction
+notebook's own method (clip to the country, a point every 100 m, nearest point
+to the settlement centroid in EPSG:32628; it reproduces the previous column to
+within a metre) and writes a sidecar JSON with layer hashes and statistics:
+
+    python tools/hv_distances.py GuineaRuns/Inputs/OnSSET_InputFile_20261018_100416.csv GuineaRuns/Inputs/OnSSET_InputFile_20261028_hv.csv         --admin "GuineaRuns/Inputs/Guinea Data/Boundaries/gadm41_GIN_0.shp"         --existing "GuineaRuns/Inputs/Guinea Data/HV_Existing_lines/Existing_HV_2026-10-28.gpkg"         --existing "GuineaRuns/Inputs/Guinea Data/HV_Existing_lines/HT_existing_line.shp|status=Existing"         --planned "GuineaRuns/Inputs/Guinea Data/HV_Planned_lines/Planned_HV_2026-10-28.gpkg"         --old "GuineaRuns/Inputs/Guinea Data/HV_Existing_lines/HT_existing_line.shp"
+
+Two choices are recorded in the control file's notes. The existing network
+adds the source's Existing-status features (the Conakry-area 110 and 60 kV
+lines, Kaleta-Maneah, Kindia-Linsan, Linsan-Mamou, Garafari-Linsan), which
+the corrected layer leaves out but which serve 3.2 million people within
+10 km. The planned network holds the unbuilt sections only, as the colleague
+delivered them; the model reaches existing lines through the settlements
+already electrified. `Scenarios/guinea_scenarios_noKKT.json` is the paired
+control file (nine core scenarios, the Linsan to Manantali feature removed
+from the planned network, input `OnSSET_InputFile_20261028_hv_noKKT.csv`);
+its batch feeds the with and without comparison of chapter 8 through the
+report's `--paired` option.
+
 Building the results report
 ---------------------------
 
@@ -97,6 +124,7 @@ the code commit), organised by the objectives of the study:
     python -m report.build GuineaRuns/Outputs/2026-10-25_table1 --inputs "GuineaRuns/Inputs/Guinea Data"
     python -m report.build GuineaRuns/Outputs/2026-10-25_table1 --inputs "GuineaRuns/Inputs/Guinea Data" --sample 500   # quick check
     python -m report.build GuineaRuns/Outputs/2026-10-25_table1 --no-maps --no-geo                                        # charts and tables only
+    python -m report.build GuineaRuns/Outputs/2026-10-28_hvfix --inputs "GuineaRuns/Inputs/Guinea Data" --paired GuineaRuns/Outputs/2026-10-28_hvfix_noKKT
 
 Output: `GuineaRuns/Outputs/<batch>/report/guinea_scenarios_report_<batch>.html`
 plus `build_manifest.json` (asset sizes, versions, consistency result) and a
