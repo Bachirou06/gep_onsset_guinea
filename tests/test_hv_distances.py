@@ -86,3 +86,10 @@ def test_recompute_replaces_the_two_columns_and_writes_a_sidecar(world):
     assert side["existing"][0]["sha256"] and side["existing"][0]["features"] == 1
     assert side["stats"]["CurrentHVLineDist"]["zero_rows"] == 1
     assert summary["rows"] == 3
+
+
+def test_read_layer_spec_excludes_on_a_field(world):
+    both = pd.concat([gpd.read_file(world["a"]), gpd.read_file(world["b"])])
+    p = world["dir"] / "both2.gpkg"
+    gpd.GeoDataFrame(both, crs=4326).to_file(p, driver="GPKG")
+    assert list(hv.read_layer(f"{p}|name!=B")["name"]) == ["A"]

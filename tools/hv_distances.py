@@ -5,7 +5,7 @@
         [--old <layer> ...] [--crs EPSG:32628] [--note "..."]
 
 A layer spec is a path, optionally followed by "|field=value" to keep only matching features
-(for example "HT_existing_line.shp|status=Existing").
+(for example "HT_existing_line.shp|status=Existing") or "|field!=value" to drop them.
 
 Method, identical to the GIS extraction notebook (funcs.ipynb, processing_lines): clip the lines
 to the admin boundary, project, explode, place a point every 100 m along each line, and take the
@@ -45,12 +45,16 @@ def _sha256(path) -> str:
 
 
 def read_layer(spec: str) -> gpd.GeoDataFrame:
-    """'path' or 'path|field=value'."""
+    """'path', 'path|field=value' (keep matching features) or 'path|field!=value' (drop them)."""
     path, _, flt = spec.partition("|")
     g = gpd.read_file(path)
     if flt:
-        field, _, value = flt.partition("=")
-        g = g[g[field].astype(str) == value].copy()
+        if "!=" in flt:
+            field, _, value = flt.partition("!=")
+            g = g[g[field].astype(str) != value].copy()
+        else:
+            field, _, value = flt.partition("=")
+            g = g[g[field].astype(str) == value].copy()
     return g
 
 
