@@ -358,8 +358,33 @@ def km_supply_variants(vc: pd.DataFrame, case: str = "BU", grid_cost: float = PR
     return {"id": "km-supply", "text": f"In the {name(case)} case{where}, {'; '.join(parts)}.", "source": "Table 9.2"}
 
 
+def km_koukoutamba(paired: pd.DataFrame) -> dict:
+    """What removing the Koukoutamba (Linsan to Manantali) line from the planned network changes,
+    per key case at the primary regime (any regime present as fallback), from paired_comparison."""
+    parts = []
+    for case in KEY_CASES:
+        sub = paired[paired["demand_case"] == case]
+        if sub.empty:
+            continue
+        at = sub[sub["grid_cost"] == PRIMARY_COST]
+        r = (at if len(at) else sub).iloc[0]
+        regime = f" at the {REGIME_NAME[float(r['grid_cost'])].lower()} regime" if float(r["grid_cost"]) in REGIME_NAME else ""
+        if int(r["switched_settlements"]) == 0:
+            parts.append(f"{name(case)}{regime}: no settlement changes technology without the line")
+            continue
+        f = r["top_flow"]
+        inv = _check(r["investment_musd_cum_pct"], f"{r['label']}.investment_pct")
+        parts.append(f"{name(case)}{regime}: without the line {fmt_int(r['switched_settlements'])} settlements "
+                     f"({fmt_people(r['switched_people'])} people) change technology, mostly {lc_first(TECH_LABEL[f[0]])} to "
+                     f"{lc_first(TECH_LABEL[f[1]])}; grid extension serves {fmt_people(r['grid_ext_people_2040_without'])} people "
+                     f"instead of {fmt_people(r['grid_ext_people_2040_with'])}, and {_investment_clause(inv)}")
+    text = ("Removing the planned Koukoutamba line (Linsan to Manantali) from the planned network: " + "; ".join(parts) + "."
+            if parts else "The paired case without the Koukoutamba line was not run for the key cases.")
+    return {"id": "km-koukoutamba", "text": text, "source": "Table 8.3"}
+
+
 def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict, variants: pd.DataFrame = None,
-                 switch_df: pd.DataFrame = None, primary_h: dict = None) -> list:
+                 switch_df: pd.DataFrame = None, primary_h: dict = None, paired: pd.DataFrame = None) -> list:
     """headlines: the core matrix keyed by core label (or demand cases); primary_h: the key cases
     at the primary regime keyed by demand case (defaults to headlines); switch_df: regime_switch_table."""
     if primary_h is None:
@@ -373,6 +398,8 @@ def key_messages(headlines: dict, sens: pd.DataFrame, deltas: dict, hydro: dict,
         msgs.append(km_supply_variants(variants))
     if hydro:
         msgs.append(km_hydro(hydro))
+    if paired is not None and len(paired):
+        msgs.append(km_koukoutamba(paired))
     if sens is not None and len(sens):
         case = "BU" if (sens["demand_case"] == "BU").any() else SENSITIVITY_CASES[0]
         msgs.append(km_grid_cost_sensitivity(sens, case))

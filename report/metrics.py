@@ -549,3 +549,51 @@ def never_grid_table(batch) -> pd.DataFrame:
     t.loc[TOTAL] = t.sum()
     t.index.name = "region"
     return t.sort_values("people_2040", ascending=False)
+
+
+# --- paired comparison: with and without the Koukoutamba line -------------------------------
+
+PAIRED_METRICS = ["investment_musd_cum", "grid_ext_people_2040", "grid_ext_settlements_2040",
+                  "dre_share_new_connections", "usd_per_new_connection", "lcoe_energy_w_excl_dens"]
+
+
+def _pct(base: float, other: float) -> float:
+    if base == other:
+        return 0.0
+    return float("nan") if not base else (other / base - 1.0) * 100.0
+
+
+def paired_comparison(batch, paired, geo_attr: pd.DataFrame = None, radius_km: float = 10, year: int = 2040) -> pd.DataFrame:
+    """One row per core scenario present in both batches. 'with' is the batch (planned network
+    with the Koukoutamba line), 'without' the paired batch (same input, the line removed from
+    the planned network). Headline metrics with, without and percent change; settlements and
+    people that change technology, with the largest flow; and, when geo_attr is given, the
+    same counts within radius_km of the corridor line."""
+    rows = []
+    core_with, core_without = batch.core(), paired.core()
+    for key, s_with in core_with.items():
+        s_without = core_without.get(key)
+        if s_without is None:
+            continue
+        h_with, h_without = headline(s_with.settlements), headline(s_without.settlements)
+        flows, totals = switches(s_with.settlements, s_without.settlements, year)
+        row = {"label": core_label(*key), "demand_case": key[0], "grid_cost": key[1]}
+        for m in PAIRED_METRICS:
+            row[f"{m}_with"], row[f"{m}_without"] = h_with[m], h_without[m]
+            row[f"{m}_pct"] = _pct(h_with[m], h_without[m])
+        row["switched_settlements"] = totals["settlements"]
+        row["switched_people"] = totals["people"]
+        row["top_flow"] = (int(flows.iloc[0]["from_code"]), int(flows.iloc[0]["to_code"])) if len(flows) else None
+        row["top_flow_people"] = float(flows.iloc[0]["people"]) if len(flows) else 0.0
+        if geo_attr is not None:
+            inside = set(geo_attr.loc[geo_attr["kkt_main_dist_km"] <= radius_km, "id"])
+            a = s_with.settlements[s_with.settlements["id"].isin(inside)]
+            b = s_without.settlements[s_without.settlements["id"].isin(inside)]
+            _, t = switches(a, b, year)
+            row["corridor_settlements"] = int(len(a))
+            row["corridor_switched_settlements"] = t["settlements"]
+            row["corridor_switched_people"] = t["people"]
+            row["corridor_grid_ext_people_with"] = float(a.loc[a[f"FinalElecCode{year}"] == 2, f"Pop{year}"].sum())
+            row["corridor_grid_ext_people_without"] = float(b.loc[b[f"FinalElecCode{year}"] == 2, f"Pop{year}"].sum())
+        rows.append(row)
+    return pd.DataFrame(rows)
