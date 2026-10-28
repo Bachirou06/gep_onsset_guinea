@@ -105,7 +105,7 @@ DEFAULT_MAP_COLOURS = 96     # palette quantisation of the map PNGs; six technol
 
 def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, maps=True, geo=True,
           corridor_km=10, map_dpi=150, map_colours=DEFAULT_MAP_COLOURS, sample=False, use_cache=True,
-          allow_inconsistent=False, log=print) -> Path:
+          allow_inconsistent=False, paired_batch_dir=None, log=print) -> Path:
     t0 = time.time()
     batch_dir = Path(batch_dir)
     repo_root = Path(repo_root)
@@ -116,6 +116,10 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     assets = {}
 
     batch = load_batch(batch_dir, repo_root, cache_dir=cache_dir, id_subset=id_subset, use_cache=use_cache, log=log)
+    paired = None
+    if paired_batch_dir is not None:
+        paired = load_batch(Path(paired_batch_dir), repo_root, cache_dir=cache_dir / "paired", id_subset=id_subset, use_cache=use_cache, log=log)
+        log(f"paired batch {paired.name}: {len(paired.scenarios)} scenarios (without the Koukoutamba line)")
     refs = batch.reference()
     ref_by_case = {s.demand_case: s for s in refs}
     # the core matrix; a batch without any core cell (an old batch) falls back to its reference cases
@@ -157,6 +161,19 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
         except Exception:
             layers = None
 
+    # --- paired comparison, with and without the Koukoutamba line --------------------
+    paired_df = M.paired_comparison(batch, paired, geo_attr, corridor_km) if paired is not None else None
+    if paired_df is not None and paired_df.empty:
+        paired_df = None
+
+    # --- the HV correction of the input (sidecar of tools/hv_distances.py) ------------
+    hv_fix = None
+    raw_rel = batch.control.get("paths", {}).get("raw_input_csv")
+    if raw_rel:
+        side = (repo_root / raw_rel).with_suffix(".hv_distances.json")
+        if side.exists():
+            hv_fix = json.loads(side.read_text(encoding="utf-8"))
+
     # --- metrics over the core matrix (keyed by core label) ----------------------
     H = {core_lab[k]: M.headline(s.settlements) for k, s in core.items()}
     TT = {core_lab[k]: {y: M.tech_table(s.settlements, y) for y in (2030, 2040)} for k, s in core.items()}
@@ -185,7 +202,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
     phasing_primary = M.phasing_table(primary.settlements)
 
     # --- key messages and KPI tiles ----------------------------------------------
-    key_messages = MS.key_messages(H, sens, deltas, HY_case, vc if len(vc) else None, switch_df=switch_df, primary_h=primary_h)
+    key_messages = MS.key_messages(H, sens, deltas, HY_case, vc if len(vc) else None, switch_df=switch_df, primary_h=primary_h, paired=paired_df)
     kpis = [{"study_name": CASE_STUDY_NAME.get(case, case) + " (key scenario)",
              "description": f"{CASE_DESCRIPTION.get(case, '')}; {_regime_text(s.grid_cost)} regime",
              "dre_new": MS.fmt_pct(primary_h[case]["dre_share_new_connections"]),
@@ -264,6 +281,18 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                  {"Parameter": "settlements in the model", "Value": f"{primary.manifest.get('rows_out', n_settlements):,}"},
                  {"Parameter": "raw extraction", "Value": meta.get("input_file_confirmed", "see the control file")},
                  {"Parameter": "settlements classed urban", "Value": f"{n_urban} ({MS.fmt_people(urban_people)} people in {yr_end})"}]
+    if hv_fix:
+        def _names(entries):
+            out = []
+            for e in entries:
+                flt = f" ({e['spec'].split('|', 1)[1]})" if "|" in e["spec"] else ""
+                out.append(f"{Path(e['path']).name}{flt}: {e['features']} features, {e['length_inside_admin_km']:,.0f} km inside the country")
+            return ", ".join(out)
+        cal_rows += [{"Parameter": "HV distance columns", "Value": f"recomputed on {hv_fix['written'][:10]} by {hv_fix['tool']} ({hv_fix['crs']}, points every {hv_fix['step_m']} m)"},
+                     {"Parameter": "existing HV network", "Value": _names(hv_fix["existing"])},
+                     {"Parameter": "planned HV network", "Value": _names(hv_fix["planned"])},
+                     {"Parameter": "settlements within 5 km of an existing HV line", "Value": f"{hv_fix['stats']['CurrentHVLineDist']['within_5_km']:,} (before the correction {hv_fix['stats_before']['CurrentHVLineDist']['within_5_km']:,})"},
+                     {"Parameter": "settlements within 5 km of a planned HV line", "Value": f"{hv_fix['stats']['PlannedHVLineDist']['within_5_km']:,} (before the correction {hv_fix['stats_before']['PlannedHVLineDist']['within_5_km']:,})"}]
     T["t23"] = table_html(pd.DataFrame(cal_rows), index=False, caption="Table 2.3. Calibration block and input file")
     sup = batch.control.get("meta", {}).get("superseded_runs", {})
     T["t24"] = table_html(pd.DataFrame([{"Earlier run": k, "Status": v} for k, v in sup.items()]) if sup else
@@ -399,10 +428,49 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                          f"generation price) and {MS.fmt_usd(c10['usd_per_new_connection'])} per newly connected person. Tables 8.1 and 8.2 give the same metrics for "
                          f"5 and 25 km corridors, for the five localities named as affected, for the Moyen-Bafing park and for the protected areas the line crosses, "
                          f"for every core scenario.")
-        corridor_note = ("The corridor is measured from the Linsan to Manantali feature only; the second feature of the layer (Maneah to Grandes Chutes) "
-                         "runs beside Conakry and would add the capital's population. The planned-grid layer used by the model is a copy of the existing "
-                         "network, so none of these settlements was modelled as reachable through the Koukoutamba line; the corrected planned-line layer "
-                         "and the paired scenario will do that.")
+        corridor_note = ("The corridor is measured from the Linsan to Manantali feature of HV_KKT.shp only; the second feature of the layer (Maneah to Grandes Chutes) "
+                         "runs beside Conakry and would add the capital's population. ")
+        corridor_note += ("The model's planned network carries the corrected planned-line layer, whose Linsan to Manantali feature follows a different route "
+                          "from the corridor layer; the paired comparison below removes that feature from the planned network."
+                          if hv_fix else
+                          "The planned-grid layer used by the model is a copy of the existing network, so none of these settlements was modelled as "
+                          "reachable through the Koukoutamba line; the corrected planned-line layer and the paired scenario will do that.")
+
+    # 8.3 with and without the Koukoutamba line
+    paired_text = ""
+    if paired_df is not None:
+        pr = []
+        for r in paired_df.itertuples():
+            row = {"Scenario": r.label,
+                   "Investment with the line (million USD)": r.investment_musd_cum_with, "Investment without (million USD)": r.investment_musd_cum_without,
+                   "Investment change": r.investment_musd_cum_pct / 100.0,
+                   "Grid extension people 2040, with": r.grid_ext_people_2040_with, "Grid extension people 2040, without": r.grid_ext_people_2040_without,
+                   "Decentralised share of new connections, with": r.dre_share_new_connections_with,
+                   "Decentralised share of new connections, without": r.dre_share_new_connections_without,
+                   "Switched settlements": r.switched_settlements, "Switched people": r.switched_people,
+                   "Largest flow": _flows_text([(r.top_flow[0], r.top_flow[1], r.top_flow_people)]) if r.top_flow else "none"}
+            if "corridor_settlements" in paired_df:
+                row.update({"Corridor settlements": r.corridor_settlements, "Corridor switched settlements": r.corridor_switched_settlements,
+                            "Corridor grid extension people, with": r.corridor_grid_ext_people_with,
+                            "Corridor grid extension people, without": r.corridor_grid_ext_people_without})
+            pr.append(row)
+        pf = {"Investment with the line (million USD)": F_1, "Investment without (million USD)": F_1, "Investment change": F_PCT,
+              "Grid extension people 2040, with": F_INT, "Grid extension people 2040, without": F_INT,
+              "Decentralised share of new connections, with": F_PCT, "Decentralised share of new connections, without": F_PCT,
+              "Switched settlements": F_INT, "Switched people": F_INT, "Corridor settlements": F_INT, "Corridor switched settlements": F_INT,
+              "Corridor grid extension people, with": F_INT, "Corridor grid extension people, without": F_INT}
+        where = f", and within the {corridor_km:g} km corridor" if corridor else ""
+        T["t83"] = table_html(pd.DataFrame(pr), pf, index=False,
+                              caption=f"Table 8.3. The core scenarios with and without the planned Koukoutamba line (Linsan to Manantali) in the planned network "
+                                      f"(batches {batch.name} and {paired.name}){where}")
+        tot_sw = int(paired_df["switched_settlements"].sum())
+        paired_text = (f"The core scenarios were rerun with the Linsan to Manantali feature removed from the planned network and everything else unchanged "
+                       f"(batch {paired.name}, the same calibrated input apart from the planned HV distance column). The line enters the model as a "
+                       f"grid-extension option: a settlement near it can connect at the cost of its distance to the line. Table 8.3 compares the headline "
+                       f"metrics of each core scenario with and without the line and counts the settlements whose least-cost technology changes "
+                       f"({tot_sw:,} over the {len(paired_df)} scenario pairs); Figure 8.2 shows the changes; the map shows where the switches fall in the "
+                       f"{primary_lab[primary.demand_case]} scenario. What the line does not carry here is the Koukoutamba plant itself: its capacity, "
+                       f"cost and dry-season firm output do not enter the model.")
 
     # 9A regime switches
     sw_rows = []
@@ -601,7 +669,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
 
     # --- maps ----------------------------------------------------------------------
     stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-    maps_ctx = {"map31": None, "ch4": [], "map61": None, "ch7": [], "map81": None, "regime": [], "map94": None}
+    maps_ctx = {"map31": None, "ch4": [], "map61": None, "ch7": [], "map81": None, "map82": None, "regime": [], "map94": None}
     if maps:
         def add(key, png, caption, source, mid, num, alt, into=None):
             png = MP.shrink_png(png, map_colours) if map_colours else png
@@ -667,7 +735,26 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                                          src(primary, "X_deg, Y_deg, FinalElecCode2040, Pop2040") + "; HV_KKT.shp; protected-area layers", dpi=map_dpi),
                 f"Settlements within {corridor_km} km of the planned Linsan to Manantali line coloured by least-cost technology in 2040 ({prim_name}), with the affected localities and the protected areas crossed by the line.",
                 src(primary, "X_deg, Y_deg, FinalElecCode2040, Pop2040") + "; HV_KKT.shp; protected-area layers", "map-8-1", "8.1", "Koukoutamba corridor map")
+        if paired is not None:
+            key = (primary.demand_case, primary.grid_cost)
+            s_without = paired.core().get(key)
+            if s_without is not None:
+                lab = core_label(*key)
+                add("map82", MP.switch_map(primary.settlements, s_without.settlements, 2040, layers, "with the line", "without the line",
+                                           "Technology switches without the Koukoutamba line", src(s_without, "X_deg, Y_deg, FinalElecCode2040, Pop2040") + f"; batch {paired.name}", dpi=map_dpi),
+                    f"Settlements whose least-cost technology changes when the Linsan to Manantali feature is removed from the planned network, {lab}.",
+                    src(s_without, "X_deg, Y_deg, FinalElecCode2040, Pop2040") + f"; batch {paired.name}", "map-8-2", "8.2", "Technology switch map, without the Koukoutamba line")
 
+    if paired_df is not None:
+        pm = ["investment_musd_cum", "grid_ext_people_2040", "dre_share_new_connections", "usd_per_new_connection", "lcoe_energy_w_excl_dens"]
+        pl = [{"demand_case": r["label"], "metric": m, "delta_pct": r[f"{m}_pct"]} for _, r in paired_df.iterrows() for m in pm]
+        figs["f82"] = {"div": F.fig_to_div(F.delta_bars_by_case(pd.DataFrame(pl), "Without the Koukoutamba line against with it, per core scenario",
+                                                                {"investment_musd_cum": "Investment", "grid_ext_people_2040": "Grid extension people 2040",
+                                                                 "dre_share_new_connections": "Decentralised share of new connections",
+                                                                 "usd_per_new_connection": "USD per newly connected person",
+                                                                 "lcoe_energy_w_excl_dens": "LCOE, newly electrified"}, pm), "fig-8-2"),
+                       "caption": "Percent change of the headline metrics when the Linsan to Manantali feature is removed from the planned network, per core scenario (a missing bar means the metric is zero with the line).",
+                       "source": "Table 8.3"}
     # --- texts ------------------------------------------------------------------------
     hp = primary_h[primary.demand_case]
     st_tot = start.loc["Total"]
@@ -719,7 +806,14 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
              "Mini-hydro sites above 1 MW are excluded upstream: the extraction used a layer filtered at 1 MW or below, so the hydro potential column holds 0 to 1,000 kW.",
              "The roll-out follows nationwide least cost (prioritisation 5); the model calls hard-code it.",
              "Diesel technologies and wind mini-grids are switched off; PV mini-grids are PV with battery."]
-    caveats = ["The planned-HV layer used in the extraction is a copy of the existing network (PlannedHVLineDist equals CurrentHVLineDist everywhere), so the planned Koukoutamba line was never part of the model's grid. Chapter 8 measures the corridor from the line layer directly. A corrected planned-line layer is being prepared and will require a new extraction and a full rerun.",
+    hv_caveat = (("The HV distance columns of the input were recomputed from the corrected HV layers (Table 2.3): the existing network is the built "
+                  "225 kV sections plus the Conakry-area lines of the source, and the planned network holds the unbuilt sections only (Linsan to Manantali "
+                  "north of Linsan, the Fomi to Linsan gap, Labe to Mali, Mali to Sambangalou, Boke to Saltinho and the cross-border ends). The earlier "
+                  "batches, which used the full line layer for both columns, are superseded. The corridor of chapter 8 is still measured from the "
+                  "HV_KKT.shp feature, whose route differs from the planned-layer feature.")
+                 if hv_fix else
+                 "The planned-HV layer used in the extraction is a copy of the existing network (PlannedHVLineDist equals CurrentHVLineDist everywhere), so the planned Koukoutamba line was never part of the model's grid. Chapter 8 measures the corridor from the line layer directly. A corrected planned-line layer is being prepared and will require a new extraction and a full rerun.")
+    caveats = [hv_caveat,
                "The delivered LCOE of settlements already on the grid equals the grid generation cost of the regime by construction; national LCOE averages therefore track the regime cost. Chapter 5 reports the newly electrified settlements separately.",
                "In 2030 the model leaves 30 percent of the population unserved by design (interim target); 2030 totals in the Summaries files count those people under 'Not yet electrified', and all per-connection metrics here use served settlements only.",
                "The earlier runs listed in Table 2.4 are superseded by this batch (the control file records why).",
@@ -761,6 +855,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                "rules": rules, "caveats": caveats, "maps": maps_ctx, "n_settlements": f"{n_settlements:,}", "reference_cost": REFERENCE_COST,
                "primary_regime": _regime_text(PRIMARY_COST), "regime_names": [_regime_text(c) for c in REGIME_ORDER],
                "figs": figs, "corridor": corridor, "corridor_text": corridor_text, "corridor_note": corridor_note,
+               "paired": paired_df is not None, "paired_text": paired_text, "paired_batch": paired.name if paired is not None else "",
                "model_says": model_says, "model_does_not_say": model_does_not_say, "summaries": summaries, "method_notes": method_notes,
                "variant_names": variant_names, "variant_labels": VARIANT_LABELS, "bins_ok": bins_ok,
                "bins_text": (f"The {CASE_STUDY_NAME.get(bins_case, bins_case)} case is run at {len(bins_costs)} grid generation cost levels "
@@ -782,7 +877,7 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
             assets[f.get("id", key)] = len(f["div"].encode("utf-8"))
     assets["plotly_js"] = len(context["plotly_js"].encode("utf-8"))
     manifest = {"batch": batch.name, "batch_dir": str(batch_dir), "n_scenarios": len(batch.scenarios), "n_settlements": n_settlements,
-                "n_core": n_core, "primary_cost": PRIMARY_COST,
+                "n_core": n_core, "primary_cost": PRIMARY_COST, "paired_batch": paired.name if paired is not None else None,
                 "sample": sample, "consistency": consistency, "html": str(out_path), "html_bytes": out_path.stat().st_size,
                 "assets": assets, "inputs_dir": str(inputs_dir) if inputs_dir else None, "corridor_km": corridor_km,
                 "map_dpi": map_dpi, "map_colours": map_colours, "report_commit": rc, "report_dirty": rdirty, "built": stamp,
@@ -807,6 +902,7 @@ def main(argv=None) -> int:
     ap.add_argument("--sample", type=int, default=0, help="build on a random sample of N settlements (seed 42), for checks")
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--allow-inconsistent", action="store_true")
+    ap.add_argument("--paired", help="batch folder of the paired runs without the Koukoutamba line (chapter 8 comparison)")
     a = ap.parse_args(argv)
     id_subset = None
     sample = False
@@ -818,6 +914,7 @@ def main(argv=None) -> int:
         sample = True
     build(a.batch, a.repo, out_path=a.out, inputs_dir=a.inputs, id_subset=id_subset, maps=not a.no_maps, geo=not a.no_geo,
           corridor_km=a.corridor_km, map_dpi=a.map_dpi, map_colours=a.map_colours, sample=sample, use_cache=not a.no_cache,
+          paired_batch_dir=a.paired,
           allow_inconsistent=a.allow_inconsistent)
     return 0
 

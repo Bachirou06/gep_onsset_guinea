@@ -108,3 +108,33 @@ def test_core_tables_and_not_run_cells(built):
     body = _body(html)
     for raw in ("grid_ext_people", "dre_share", "lcoe_energy_w", "investment_musd"):
         assert raw not in body, raw
+
+
+@pytest.fixture(scope="session")
+def built_paired(report_sample_batch, repo_root, tmp_path_factory):
+    """The sample batch paired with itself: every delta is zero, every paired exhibit must still render."""
+    from report.build import build
+    out_dir = tmp_path_factory.mktemp("report_paired")
+    geo = INPUTS.exists()
+    path = build(report_sample_batch, repo_root, out_path=out_dir / "report.html", inputs_dir=INPUTS if geo else None,
+                 maps=True, geo=geo, sample=True, paired_batch_dir=report_sample_batch, log=lambda *a: None)
+    return path, out_dir
+
+
+def test_paired_build_has_the_koukoutamba_comparison(built_paired):
+    path, out_dir = built_paired
+    html = path.read_text(encoding="utf-8")
+    body = _body(html)
+    assert 'id="fig-8-2"' in html and "Table 8.3." in body and 'id="km-koukoutamba"' in html
+    assert "With and without the Koukoutamba line" in body
+    if INPUTS.exists():
+        assert 'id="map-8-2"' in html
+    manifest = json.loads((out_dir / "build_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["paired_batch"]
+
+
+def test_unpaired_build_states_the_paired_case_is_pending(built):
+    path, _ = built
+    body = _body(path.read_text(encoding="utf-8"))
+    assert "With and without the Koukoutamba line" not in body
+    assert 'id="fig-8-2"' not in body

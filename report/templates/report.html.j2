@@ -146,7 +146,7 @@
 {# ---------------------------------------------------------------- 8 #}
 <section class="chapter" id="corridor">
 <h2>8. Koukoutamba corridor and protected areas</h2>
-<p class="objective">Objective 4 (preparatory): the settlements the planned Koukoutamba transmission line would pass, and the protected areas and localities it affects, under the least-cost results of every core scenario. The paired with and without Koukoutamba scenario is a separate modelling step.</p>
+<p class="objective">Objective 4 (preparatory): the settlements the planned Koukoutamba transmission line would pass, and the protected areas and localities it affects, under the least-cost results of every core scenario{% if paired %}, and the core scenarios with and without the line in the planned network{% else %}. The paired with and without Koukoutamba scenario is a separate modelling step{% endif %}.</p>
 {% if corridor %}
 <p>{{ corridor_text | e }}</p>
 <div class="table-wrap">{{ tables.t81 }}</div>
@@ -155,6 +155,13 @@
 <p class="note">{{ corridor_note | e }}</p>
 {% else %}
 <p class="note">Built without the GIS layers; the corridor tables and map are omitted.</p>
+{% endif %}
+{% if paired %}
+<h3>With and without the Koukoutamba line</h3>
+<p>{{ paired_text | e }}</p>
+<div class="table-wrap">{{ tables.t83 }}</div>
+<figure id="fig-8-2">{{ figs.f82.div }}<figcaption><b>Figure 8.2.</b> {{ figs.f82.caption | e }}</figcaption><p class="source">Source: {{ figs.f82.source | e }}</p></figure>
+{% if maps.map82 %}<figure id="map-8-2"><img src="{{ maps.map82.uri }}" alt="{{ maps.map82.alt | e }}"><figcaption><b>Figure 8.3.</b> {{ maps.map82.caption | e }}</figcaption><p class="source">Source: {{ maps.map82.source | e }}</p></figure>{% endif %}
 {% endif %}
 </section>
 
