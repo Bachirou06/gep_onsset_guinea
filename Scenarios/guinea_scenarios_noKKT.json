@@ -15,9 +15,9 @@
       "Key scenarios agreed with the team (2026-10-25): U3R1 (TD_Low_minus), U4R2 (TD_High_minus, urban tier 4, rural tier 2) and BU; they carry the full cost sweep and both supply-side variants.",
       "Grid cost bins (2026-10-25): the bottom-up case is also run at 0.06, 0.12, 0.14, 0.16, 0.18, 0.20 and 0.25 USD/kWh to map how the technology mix moves with the grid generation cost (heat maps in the sensitivity chapter).",
       "Final scenario set (2026-10-25, team decision): the three key cases at three grid generation cost regimes, 0.22 USD/kWh unsubsidised (Mission 300 compact), 0.085 USD/kWh subsidised with hydro-dominant supply, 0.1 USD/kWh subsidised; supply-side sensitivity (optgrid, optgrid_optmg) at every regime. The earlier sweep and bins stay for the sensitivity chapter.",
-      "HV correction (2026-10-28). The 2026-10-18 extraction used the full HT_existing_line.shp (66 features, existing and planned mixed) for both HV distance columns. The corrected input keeps every other column and recomputes: CurrentHVLineDist from the built 225 kV sections (colleague's Existing_HV.gpkg) plus the Existing-status features of the source (Conakry-area 110 and 60 kV lines, Kaleta-Maneah, Kindia-Linsan, Linsan-Mamou, Garafari-Linsan); PlannedHVLineDist from the unbuilt sections only (colleague's Planned_HV.gpkg: Linsan-Manantali north of Linsan, Fomi-Linsan gap, Labe-Mali, Mali-Sambangalou, Boke-Saltinho and the cross-border ends). Batches before 2026-10-28_hvfix are superseded by this correction."
+      "HV correction (layers 2026-10-28, re-extraction received 2026-10-31). The 2026-10-18 extraction used the full HT_existing_line.shp (66 features, existing and planned mixed) for both HV distance columns. The colleague's re-extraction OnSSET_InputFile_20261028_140602.csv keeps every other column and recomputes with the extraction notebook: CurrentHVLineDist from the built 225 kV sections (Existing_HV.gpkg); PlannedHVLineDist from the union of the built and the unbuilt sections (Existing_HV.gpkg plus Planned_HV.gpkg), that is the whole future network, which is what the model's second extension round expects. The Existing-status features of the source (Conakry-area 110 and 60 kV lines, Kaleta-Maneah, Kindia-Linsan, Linsan-Mamou, Garafari-Linsan) are in neither layer: stated as a caveat, to settle with the colleague. The built/unbuilt split is the colleague's assessment; its basis is to be documented. Batches before 2026-10-31_hv are superseded."
     ],
-    "input_file_confirmed": "OnSSET_InputFile_20261028_hv_noKKT.csv: as the main control file's input but PlannedHVLineDist recomputed without the Linsan - Manantali feature of Planned_HV_2026-10-28.gpkg (tools/hv_distances.py, sidecar OnSSET_InputFile_20261028_hv_noKKT.hv_distances.json). Nine core scenarios only; compared with batch 2026-10-28_hvfix in chapter 8 of the report.",
+    "input_file_confirmed": "OnSSET_InputFile_20261028_140602_noKKT.csv: as the main control file's input but PlannedHVLineDist recomputed by tools/hv_distances.py from the union without the Linsan - Manantali feature of Planned_HV_2026-10-28.gpkg (CurrentHVLineDist unchanged; sidecar OnSSET_InputFile_20261028_140602_noKKT.hv_distances.json). Nine core scenarios only; compared with batch 2026-10-31_hv in chapter 8 of the report.",
     "superseded_runs": {
       "D2_bOT_0.047_1": "pre-fix extraction; raster attributes misaligned on 90 percent of settlements",
       "D2_BOT_0.047_1_10km_H_GL127": "pre-fix extraction; superseded by BU_g0.047",
@@ -27,8 +27,8 @@
     }
   },
   "paths": {
-    "raw_input_csv": "GuineaRuns/Inputs/OnSSET_InputFile_20261028_hv_noKKT.csv",
-    "calibrated_csv": "GuineaRuns/Calibrated/GIN_calibrated_20261028_hv_noKKT.csv",
+    "raw_input_csv": "GuineaRuns/Inputs/OnSSET_InputFile_20261028_140602_noKKT.csv",
+    "calibrated_csv": "GuineaRuns/Calibrated/GIN_calibrated_20261028_140602_noKKT.csv",
     "pv_profile": "GuineaRuns/Inputs/Guinea Data/Solar profile/gn-2-pv.csv",
     "wind_profile": "GuineaRuns/Inputs/Guinea Data/Wind profile/gn-2-wind.csv",
     "productive_matrix": "gep_onsset/productive_uses_matrix.json",

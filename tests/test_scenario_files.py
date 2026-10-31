@@ -83,8 +83,8 @@ def test_study_calibration_block(sc):
 
 def test_study_paths_point_at_confirmed_input_and_profiles(sc):
     c = sc.load_control(STUDY, check_paths=False)
-    assert c.paths["raw_input_csv"].name == "OnSSET_InputFile_20261028_hv.csv"
-    assert c.paths["calibrated_csv"].name == "GIN_calibrated_20261028_hv.csv"
+    assert c.paths["raw_input_csv"].name == "OnSSET_InputFile_20261028_140602.csv"
+    assert c.paths["calibrated_csv"].name == "GIN_calibrated_20261028_140602.csv"
     assert c.paths["pv_profile"].name == "gn-2-pv.csv" and c.paths["wind_profile"].name == "gn-2-wind.csv"
     assert c.paths["productive_matrix"].name == "productive_uses_matrix.json"
 

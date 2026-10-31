@@ -73,19 +73,23 @@ def load_layers(inputs_dir) -> dict:
 
 
 def _existing_network(layers: dict) -> dict:
-    """The existing HV network drawn on the maps. With the corrected layer of 2026-10-28 it is the
-    colleague's built 225 kV sections plus the Existing-status features of the legacy source
-    (the Conakry-area lines); without it, the legacy layer as a whole, as before the correction."""
+    """The HV network as the model sees it. With the colleague's layers of 2026-10-28, `hv_existing`
+    is the built 225 kV sections (the model's CurrentHVLineDist layer) and `hv_existing_unmodelled`
+    holds the Existing-status features of the legacy source (the Conakry-area 110 and 60 kV lines,
+    Kaleta-Maneah, Kindia-Linsan, Linsan-Mamou, Garafari-Linsan), which are in neither of the model's
+    HV layers and are drawn apart so the caveat is visible on the maps. Without the colleague's layer,
+    the legacy layer as a whole is the existing network, as before the correction."""
     new, legacy = layers.get("hv_existing_new"), layers.get("hv_existing_legacy")
     if new is None and legacy is None:
         return {}
     if new is None:
         return {"hv_existing": legacy}
-    parts = [new]
+    out = {"hv_existing": new.drop_duplicates(subset=["name"]) if "name" in new else new}
     if legacy is not None and "status" in legacy:
-        parts.append(legacy[legacy["status"].astype(str) == LEGACY_EXISTING_STATUS])
-    cols = [c for c in ("name", "voltage_kV", "status", "year") if all(c in p for p in parts)]
-    return {"hv_existing": gpd.GeoDataFrame(pd.concat([p[cols + ["geometry"]] for p in parts], ignore_index=True), crs=WGS84)}
+        unmodelled = legacy[legacy["status"].astype(str) == LEGACY_EXISTING_STATUS]
+        if len(unmodelled):
+            out["hv_existing_unmodelled"] = unmodelled.drop_duplicates(subset=["name"]) if "name" in unmodelled else unmodelled
+    return out
 
 
 def _layer_signature(inputs_dir: Path) -> dict:

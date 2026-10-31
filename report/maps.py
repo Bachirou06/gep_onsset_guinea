@@ -144,6 +144,9 @@ def draw_network(ax, layers, kkt=True):
     if "hv_planned" in layers:
         _clipped(layers, "hv_planned").plot(ax=ax, color=HV_COLOUR, linewidth=1.0, linestyle=(0, (2, 2)), zorder=7)
         handles.append(Line2D([0], [0], color=HV_COLOUR, lw=1.2, ls=(0, (2, 2)), label="Planned HV line (unbuilt section)"))
+    if "hv_existing_unmodelled" in layers:
+        _clipped(layers, "hv_existing_unmodelled").plot(ax=ax, color=HV_COLOUR, linewidth=0.6, alpha=0.55, zorder=6)
+        handles.append(Line2D([0], [0], color=HV_COLOUR, lw=0.8, alpha=0.55, label="Existing 110 and 60 kV lines not in the model's HV layers"))
     if kkt and "kkt" in layers:
         _clipped(layers, "kkt").plot(ax=ax, color=KKT_COLOUR, linewidth=1.4, linestyle=(0, (4, 2)), zorder=8)
         handles.append(Line2D([0], [0], color=KKT_COLOUR, lw=1.4, ls=(0, (4, 2)), label="Planned Koukoutamba 225 kV line"))

@@ -288,7 +288,8 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                 flt = f" ({e['spec'].split('|', 1)[1]})" if "|" in e["spec"] else ""
                 out.append(f"{Path(e['path']).name}{flt}: {e['features']} features, {e['length_inside_admin_km']:,.0f} km inside the country")
             return ", ".join(out)
-        cal_rows += [{"Parameter": "HV distance columns", "Value": f"recomputed on {hv_fix['written'][:10]} by {hv_fix['tool']} ({hv_fix['crs']}, points every {hv_fix['step_m']} m)"},
+        cal_rows += [{"Parameter": "HV distance columns", "Value": f"{hv_fix['tool']}; {hv_fix['crs']}, points every {hv_fix['step_m']} m; sidecar written {hv_fix['written'][:10]}"},
+                     {"Parameter": "HV layers, note", "Value": hv_fix.get("note", "")},
                      {"Parameter": "existing HV network", "Value": _names(hv_fix["existing"])},
                      {"Parameter": "planned HV network", "Value": _names(hv_fix["planned"])},
                      {"Parameter": "settlements within 5 km of an existing HV line", "Value": f"{hv_fix['stats']['CurrentHVLineDist']['within_5_km']:,} (before the correction {hv_fix['stats_before']['CurrentHVLineDist']['within_5_km']:,})"},
@@ -430,8 +431,8 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                          f"for every core scenario.")
         corridor_note = ("The corridor is measured from the Linsan to Manantali feature of HV_KKT.shp only; the second feature of the layer (Maneah to Grandes Chutes) "
                          "runs beside Conakry and would add the capital's population. ")
-        corridor_note += ("The model's planned network carries the corrected planned-line layer, whose Linsan to Manantali feature follows a different route "
-                          "from the corridor layer; the paired comparison below removes that feature from the planned network."
+        corridor_note += ("The model's planned network is the whole future HV network (built plus unbuilt sections), whose Linsan to Manantali feature "
+                          "follows a different route from the corridor layer; the paired comparison below removes that feature from the planned network."
                           if hv_fix else
                           "The planned-grid layer used by the model is a copy of the existing network, so none of these settlements was modelled as "
                           "reachable through the Koukoutamba line; the corrected planned-line layer and the paired scenario will do that.")
@@ -806,11 +807,15 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
              "Mini-hydro sites above 1 MW are excluded upstream: the extraction used a layer filtered at 1 MW or below, so the hydro potential column holds 0 to 1,000 kW.",
              "The roll-out follows nationwide least cost (prioritisation 5); the model calls hard-code it.",
              "Diesel technologies and wind mini-grids are switched off; PV mini-grids are PV with battery."]
-    hv_caveat = (("The HV distance columns of the input were recomputed from the corrected HV layers (Table 2.3): the existing network is the built "
-                  "225 kV sections plus the Conakry-area lines of the source, and the planned network holds the unbuilt sections only (Linsan to Manantali "
-                  "north of Linsan, the Fomi to Linsan gap, Labe to Mali, Mali to Sambangalou, Boke to Saltinho and the cross-border ends). The earlier "
-                  "batches, which used the full line layer for both columns, are superseded. The corridor of chapter 8 is still measured from the "
-                  "HV_KKT.shp feature, whose route differs from the planned-layer feature.")
+    hv_caveat = (("The HV distance columns of the input come from the corrected HV layers (Table 2.3): the existing network is the built 225 kV "
+                  "sections, and the planned network is the whole future network, built sections plus the unbuilt ones (Linsan to Manantali north of "
+                  "Linsan, the Fomi to Linsan gap, Labe to Mali, Mali to Sambangalou, Boke to Saltinho and the cross-border ends). Two limits of these "
+                  "layers are open with the analyst who prepared them. First, the existing 110 and 60 kV lines around Conakry and the Kaleta to Maneah, "
+                  "Kindia to Linsan, Linsan to Mamou and Garafari to Linsan lines, which the line source tags as existing, are in neither layer, so the "
+                  "model places no HV line near the capital and the Kindia corridor (about 3.2 million people within 10 km of those lines); the maps draw "
+                  "them in a lighter stroke. Second, the split between built and unbuilt sections is the analyst's assessment and its basis is not yet "
+                  "documented. The earlier batches, which used the full line layer for both columns, are superseded. The corridor of chapter 8 is "
+                  "measured from the HV_KKT.shp feature, whose route differs from the planned-layer feature.")
                  if hv_fix else
                  "The planned-HV layer used in the extraction is a copy of the existing network (PlannedHVLineDist equals CurrentHVLineDist everywhere), so the planned Koukoutamba line was never part of the model's grid. Chapter 8 measures the corridor from the line layer directly. A corrected planned-line layer is being prepared and will require a new extraction and a full rerun.")
     caveats = [hv_caveat,

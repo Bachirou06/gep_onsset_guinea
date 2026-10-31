@@ -64,3 +64,31 @@ Findings (scripts in the session scratchpad, numbers from the 83,010-row input f
   Table 2.3 rows and caveat from the sidecar, chapter 8 section "With and without the Koukoutamba
   line" (Table 8.3, Figures 8.2 and 8.3, key message `km-koukoutamba`).
 - README section "The HV correction (28 October 2026)".
+
+## Addendum, 31 October 2026: the colleague's own re-extraction replaces rulings 1 to 3
+
+The colleague delivered `OnSSET_InputFile_20261028_140602.csv`, the 2026-10-18 extraction with the two
+HV columns recomputed by the extraction notebook from his layers. Checks (scratchpad scripts, numbers
+from the file):
+
+- Every column other than the two HV columns is identical to the 2026-10-18 file (same ids, coordinates,
+  MV distances).
+- `CurrentHVLineDist` is the distance to `Existing_HV.gpkg` alone; `PlannedHVLineDist` the distance to
+  the union of `Existing_HV.gpkg` and `Planned_HV.gpkg`. Both reproduce to within 1 m on every non-zero
+  row with the tool in EPSG:32628. The 193 and 203 zeros are a fresh polygon-intersection pass.
+- The union reading of the planned column is the right one for the model: the second extension round
+  offers every settlement a connection at its distance to that column, so the column must describe the
+  whole future network. Ruling 2 (unbuilt sections only) is withdrawn.
+- His existing layer omits the Existing-status features of the source (Conakry-area lines, Kaleta-Maneah,
+  Kindia-Linsan, Linsan-Mamou, Garafari-Linsan). The mission lead chose to run his file as delivered;
+  ruling 1 becomes a caveat and a question to the colleague. A candidate with those lines added to both
+  columns (`OnSSET_InputFile_20261031_hv_union.csv`) was built and not run.
+- The stated basis for the built/unbuilt split (overlap with the MV layer) does not reproduce: no built
+  section runs within 500 m of an MV line for more than 9 percent of its length, and the unbuilt sections
+  score zero as well. The split is recorded as the colleague's assessment, basis to be documented.
+- Ruling 3 (carried-over zeros) is moot: the file carries the notebook's own zeros.
+
+Rulings 4 to 6 stand. Runs of record: `2026-10-31_hv` (53 scenarios) and `2026-10-31_hv_noKKT` (nine
+core scenarios, planned network = union minus the Linsan to Manantali feature of `Planned_HV.gpkg`,
+existing column unchanged). The report draws the omitted Conakry-area lines in a lighter stroke
+(`hv_existing_unmodelled` in `report/geo.py`) so the caveat is visible on every map.
