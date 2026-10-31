@@ -472,6 +472,14 @@ def build(batch_dir, repo_root, out_path=None, inputs_dir=None, id_subset=None, 
                        f"({tot_sw:,} over the {len(paired_df)} scenario pairs); Figure 8.2 shows the changes; the map shows where the switches fall in the "
                        f"{primary_lab[primary.demand_case]} scenario. What the line does not carry here is the Koukoutamba plant itself: its capacity, "
                        f"cost and dry-season firm output do not enter the model.")
+        if tot_sw == 0:
+            paired_text += (" The result is a null one: in none of the pairs does a settlement change technology, and the investment totals agree to the "
+                            "million. The line runs through sparsely settled country. The settlements near it are small, and a connection from an HV line, "
+                            "which carries the cost of a substation on top of the line itself, does not beat stand-alone PV for them at any of the three "
+                            "regimes. In these scenarios grid extension grows out of the MV network around the towns already served, and the settlements "
+                            "along the corridor are served by stand-alone systems with or without the line. Whatever the line brings to electrification "
+                            "therefore comes through the plant it evacuates and the price of its electricity, which the regimes of chapter 9 cover, not "
+                            "through the connections the line itself offers.")
 
     # 9A regime switches
     sw_rows = []
