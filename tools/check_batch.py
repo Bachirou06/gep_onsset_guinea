@@ -45,7 +45,8 @@ def main(argv=None) -> int:
     check("Non-electrified Population2040 is zero everywhere", (ne.population == 0).all(),
           f"max {ne.population.max():.0f}")
 
-    refs = [sid for sid in ids if sid.endswith("_g0.1")]
+    # the demand cases at the reference cost; the supply-side variants (optgrid, optgrid_optmg) differ by design
+    refs = [sid for sid in ids if sid.endswith("_g0.1") and "optgrid" not in sid]
     diff_keys = set()
     base = None
     for sid in refs:
